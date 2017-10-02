@@ -1,0 +1,14 @@
+/.idea/*
+*.egg-info
+.eggs/
+
+*.py[co]
+
+lextab.py
+parsetab.py
+parser.out
+
+.coverage
+cover/
+dist/
+build/
