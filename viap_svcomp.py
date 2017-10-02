@@ -11285,12 +11285,9 @@ def getParameters(e,para_list,f_cycle):
 def query2z3(constraint_list,conclusion,vfact,inputmap,witnessXml):
 	pythonProgram="import sys\n"
         pythonProgram+="import os\n"
-<<<<<<< HEAD
         pythonProgram+="currentdirectory = os.path.dirname(os.path.realpath(__file__))\n"
         pythonProgram+="sys.path.append(currentdirectory+\"/packages/setuptools/\")\n"
-=======
         pythonProgram+="currentdirectory = os.path.dirname(os.path.realpath(__file__))\n"
->>>>>>> 8993f57caa05f950ff68794fa355b446d87f18a4
         pythonProgram+="sys.path.append(currentdirectory+\"/packages/z3/python/\")\n"
 	pythonProgram+="from z3 import *\n"
         pythonProgram+="init(currentdirectory+\"/packages/z3\")\n"
@@ -11405,12 +11402,9 @@ def query2z3(constraint_list,conclusion,vfact,inputmap,witnessXml):
 def query2z3_update(constraint_list,conclusion,vfact,witnessXml):
 	pythonProgram="import sys\n"
         pythonProgram+="import os\n"
-<<<<<<< HEAD
         pythonProgram+="currentdirectory = os.path.dirname(os.path.realpath(__file__))\n"
         pythonProgram+="sys.path.append(currentdirectory+\"/packages/setuptools/\")\n"
-=======
         pythonProgram+="currentdirectory = os.path.dirname(os.path.realpath(__file__))\n"
->>>>>>> 8993f57caa05f950ff68794fa355b446d87f18a4
         pythonProgram+="sys.path.append(currentdirectory+\"/packages/z3/python/\")\n"
 	pythonProgram+="from z3 import *\n"
         pythonProgram+="init(currentdirectory+\"/packages/z3\")\n"
