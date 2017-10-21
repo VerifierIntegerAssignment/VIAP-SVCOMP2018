@@ -42,6 +42,7 @@ Assumptions:
   - smallest is a reserved word so cannot be a variable
 """
 
+
 import sys
 import os
 
@@ -58,16 +59,21 @@ sys.path.append(currentdirectory+"/packages/sympy/")
 sys.path.append(currentdirectory+"/packages/z3/python/")
 
 
+
 import re
 import random
 #add by Pritom Rajkhowa
+#import numpy as np
 import resource
+#import wolframalpha
+#import sys
 import itertools
 import plyj.parser
 import plyj.model as m
 import subprocess
 from sympy import *
 import regex
+#import os
 import copy
 import time
 import datetime
@@ -121,7 +127,6 @@ def is_hex(input_string):
     		return None
 
 
-
 #Find Intersection of Two lists
 
 
@@ -161,7 +166,7 @@ _infix_op = ['=','==','!=','<','<=','>','>=','*','**','+','-','/', '%', 'implies
 # variables introduced in the translation
 
 def isvariable(x):
-    if x.startswith('_x') or  x.startswith('_y') or  x.startswith('_n'):
+    if x.startswith('_x') or  x.startswith('_y') or  x.startswith('_n') or  x.startswith('_s'):
         return True
     else:
         return False
@@ -535,6 +540,8 @@ def simplify_ind_equation(e,array_list):
         		parameter=simplify_ind_equation(x,array_list)
         		if count==0:
         			status=evaluateCondition(parameter,array_list)
+                                if status == 'Unknown':
+                                    parameter = evaluateConditionModify(parameter,array_list)
         		elif count==1:
         			ifcase=parameter
         		elif count==2:
@@ -691,6 +698,45 @@ def evaluateCondition(e,array_list):
 
 
 
+def evaluateConditionModify(e,array_list):
+        modify_parameter=[]
+	if e[:1]==['and']:
+		status=None
+		for x in expr_args(e):
+			parameter=simplify_ind_equation(x,array_list)
+			expression=expr2string1(parameter)
+			if  parameter[0]== '=' and 'and' not in expression and 'or' not in expression and 'implies' not in expression and 'ite' not in expression:
+				left=expr2string1(parameter[1])
+				right=expr2string1(parameter[2])
+				c_status=simplify(left)==simplify(right)
+				if c_status!=True:
+                                    modify_parameter.append(x)
+			else:
+                                modify_parameter.append(x)
+		if len(modify_parameter)==1:
+                    return modify_parameter[0]
+                else:
+                    return e[:1]+modify_parameter
+	elif e[:1]==['or']:
+		status=None
+		for x in expr_args(e):
+			parameter=simplify_ind_equation(x,array_list)
+			expression=expr2string1(parameter)
+			if  parameter[0] is '=' and 'and' not in expression and 'or' not in expression and 'implies' not in expression and 'ite' not in expression:
+				left=expr2string1(expr2string1(parameter[1]))
+				right=expr2string1(expr2string1(parameter[2]))
+				c_status=simplify(left)==simplify(right)
+				if c_status!=True:
+                                    modify_parameter.append(x)
+                        else:
+                            modify_parameter.append(x)
+		if len(modify_parameter)==1:
+                    return modify_parameter[0]
+                else:
+                    return e[:1]+modify_parameter
+
+
+
 
 
 
@@ -811,7 +857,7 @@ def expr2z3(e,var_cstr_map):
             			list_constrn="And("+list_constrn+","+var_cstr_map[x]+")"
             	return 'Implies('+list_constrn+ ','+expr2z3(args[1],var_cstr_map)+')'
         elif op in _infix_op and len(args)==2:
-            return '(' + expr2z3(args[0],var_cstr_map)+ op+expr2z3(args[1],var_cstr_map)+')'
+            return '((' + expr2z3(args[0],var_cstr_map)+')'+ op+'('+expr2z3(args[1],var_cstr_map)+'))'
         else:
             return op +'('+ ','.join(list(trim_p(expr2z3(x,var_cstr_map)) for x in args))+ ')'
 
@@ -917,12 +963,13 @@ def expr2z3_update(e,var_cstr_map):
                         else:
                             return 'power((' + expression1+')'+','+'('+expression2+'))'
         	elif op=='=':
-        		return '(' + expression1+ '=='+expression2+')'
+                    
+        		return '((' + expression1+ ')==('+expression2+'))'
         	else:
         		if op=='*':
                             expression='((' + expression1+')'+ op+'('+expression2+'))'
                         else:
-                            expression='(' + expression1+ op+expression2+')'
+                            expression='((' + expression1+')'+ op+'('+expression2+'))'
         		if '/' not in expression and 'Or' not in expression and '==' not in expression and 'And' not in expression and '.' not in expression:
         			return simplify_expand_sympy(expression)
         		else:
@@ -1044,9 +1091,9 @@ def expr2z3_update_postCond(e,var_cstr_map):
                     else:
                         return 'power((' + expression1+')'+','+'('+expression2+'))'
         	elif op=='=':
-        		return '(' + expression1+ '=='+expression2+')'
+        		return '((' + expression1+ ')==('+expression2+'))'
         	else:
-        		expression='(' + expression1+ op+expression2+')'
+        		expression='((' + expression1+')'+ op+'('+expression2+'))'
         		if '/' not in expression and 'Or' not in expression and '==' not in expression and 'And' not in expression and 'Implies' not in expression and 'If' not in expression:
         			return simplify_expand_sympy(expression)
         		else:
@@ -1496,7 +1543,9 @@ def wff2z3_update(w):
             	if '_x1' in var_cstr_map.keys():
             		del var_cstr_map['_x1']
             	flag_constr=True
-            	
+            if '_s1' in var_cstr_map.keys():
+                del var_cstr_map['_s1']
+            	flag_constr=True
             list_cstr_str=cstr_list(var_cstr_map.values())
             if 'Or' not in lhs and 'And' not in lhs and 'If' not in lhs and '/' not in lhs:
             	lhs=convert_pow_op_fun(simplify_expand_sympy(lhs))
@@ -1632,7 +1681,9 @@ def wff2z3_update(w):
             		if '_x1' in var_cstr_map.keys():
             			del var_cstr_map['_x1']
             		flag_constr=True
-            	
+                if '_s1' in var_cstr_map.keys():
+                    del var_cstr_map['_s1']
+                    flag_constr=True
             	list_cstr_str=cstr_list(var_cstr_map.values())
             	list_cstr_str2=cstr_list(var_cstr_map.values())
             	if list_cstr_str is not None:
@@ -1736,9 +1787,267 @@ def wff2z3_update1(w,const_var_map):
             	if '_x1' in var_cstr_map.keys():
             		del var_cstr_map['_x1']
             	flag_constr=True
-            	
+            if '_s1' in var_cstr_map.keys():
+                del var_cstr_map['_s1']
+                flag_constr=True
             list_cstr_str=cstr_list(var_cstr_map.values())
             #add by pritom 30/08/2017
+            list_cstr_str=cstr_list_additional(list_cstr_str,var_cstr_map.keys(),const_var_map)
+            if 'Or' not in lhs and 'And' not in lhs and 'If' not in lhs and '/' not in lhs:
+            	lhs=convert_pow_op_fun(simplify_expand_sympy(lhs))
+            if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+            	rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+            if w[-1][0] in ['==','<=','>=','>','<','!=','or','and']:
+                rhs='If(('+rhs+')==0,0,1)'
+            if list_var_str is not None and list_cstr_str is not None:
+            	if w[0] == 'i1':
+                	return "ForAll(["+list_var_str+"],Implies("+list_cstr_str+",("+lhs+') == ('+ rhs+")))"
+                else:
+                	if flag_constr==True:
+                		return "ForAll(["+list_var_str+"],Implies("+list_cstr_str+",("+lhs+') == ('+ rhs+"))"
+                	else:
+                		return 'ForAll(['+list_var_str+'],('+lhs+') == ('+ rhs+"))"
+            else:
+                return lhs+' == '+ rhs
+        elif w[0] == 'd0': # Bi-implications are represented using equality == in z3py
+            var_cstr_map={}
+	    lhs=expr2z3_update(w[1],var_cstr_map)
+            rhs=expr2z3_update(w[2],var_cstr_map)
+            list_var_str=qualifier_list(var_cstr_map.keys())
+            list_cstr_str=cstr_list(var_cstr_map.values())
+            #add by pritom 30/08/2017
+            list_cstr_str=cstr_list_additional(list_cstr_str,var_cstr_map.keys(),const_var_map)
+            if 'Or' not in lhs and 'And' not in lhs and 'If' not in lhs and '/' not in lhs:
+	    	lhs=convert_pow_op_fun(simplify_expand_sympy(lhs))
+	    if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+            	rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+            if list_var_str is not None and list_cstr_str is not None:
+                return 'ForAll(['+list_var_str+'],('+lhs+'=0) == ('+ rhs+"))"
+            else:
+                return lhs+'=0 == '+ rhs
+        elif w[0] == 'd1': # Bi-implications are represented using equality == in z3py
+            var_cstr_map={}
+	    lhs=expr2z3_update(w[2],var_cstr_map)
+            rhs=expr2z3_update(w[3],var_cstr_map)
+            list_var_str=qualifier_list(var_cstr_map.keys())
+            list_cstr_str=cstr_list(var_cstr_map.values())
+            #add by pritom 30/08/2017
+            list_cstr_str=cstr_list_additional(list_cstr_str,var_cstr_map.keys(),const_var_map)
+            lhs=w[1]+'+1'
+            if 'Or' not in lhs and 'And' not in lhs and 'If' not in lhs and '/' not in lhs:
+	    	lhs=convert_pow_op_fun(simplify_expand_sympy(lhs))
+	    if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+            	rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+            if list_var_str is not None and list_cstr_str is not None:
+                return "ForAll(["+list_var_str+"],"+lhs+' == '+rhs+")"
+            else:
+                return lhs+' == '+rhs
+        elif w[0]=='a' or w[0]=='s0':
+            var_cstr_map={}
+	    expression=expr2z3_update(w[1],var_cstr_map)
+            list_var_str=qualifier_list(var_cstr_map.keys())
+            list_cstr_str=cstr_list(var_cstr_map.values())
+            #add by pritom 30/08/2017
+            list_cstr_str=cstr_list_additional(list_cstr_str,var_cstr_map.keys(),const_var_map)
+            if 'Or' not in expression and 'And' not in expression and 'If' not in expression and '/' not in expression:
+	    	expression=convert_pow_op_fun(simplify_expand_sympy(expression))
+            if list_var_str is not None and list_cstr_str is not None:
+                if 'Implies' in expression:
+                    arg_list=extract_args(expression)
+                    constr=simplify(arg_list[0])
+                    axms=str(constr).split('<')
+                    axms[0]=axms[0].strip()
+                    axms[1]=axms[1].strip()
+                    arg_list[1]='Or('+axms[1]+'==0,'+arg_list[1].replace(axms[0],'('+axms[1]+'-1)')+')'
+                    if list_var_str is not None and list_cstr_str is not None:
+                        return 'ForAll(['+str(list_var_str)+'],Implies('+str(list_cstr_str)+','+arg_list[1]+'))'
+                    else:
+                        return arg_list[1]
+                else:
+                    return 'ForAll(['+list_var_str+'],Implies('+list_cstr_str+','+expression+'))'
+                    
+            else:
+                return expression
+        elif w[0]=='s1':
+            var_cstr_map={}
+            equations=[]
+	    expression=expr2z3_update(w[1],var_cstr_map)
+	    list_var_str=qualifier_list(var_cstr_map.keys())
+            list_cstr_str=cstr_list(var_cstr_map.values())
+            if 'Or' not in expression and 'And' not in expression and 'If' not in expression and '/' not in expression:
+	    	expression=convert_pow_op_fun(simplify_expand_sympy(expression))
+            if list_var_str is not None and list_cstr_str is not None:
+                if 'Implies' in expression:
+                    arg_list=extract_args(expression)
+                    constr=simplify(arg_list[0])
+                    axms=str(constr).split('<')
+                    axms[0]=axms[0].strip()
+                    axms[1]=axms[1].strip()
+                    var_cstr_map_mod={}
+                    for x in var_cstr_map.keys():
+                        if x!=axms[0]:
+                            var_cstr_map_mod[x]=var_cstr_map[x]
+                    list_var_str_new=qualifier_list(var_cstr_map_mod.keys())
+                    list_cstr_str_new=cstr_list(var_cstr_map_mod.values())
+
+                    new_w = copy.deepcopy(w)
+                    for element in var_cstr_map.keys():
+                    	fun=[]
+                    	fun.append('_f')
+                    	parameter=[]
+                    	parameter.append(element)
+                    	fun.append(parameter)
+                    	sub=[]
+                    	sub.append(element)
+                    	new_w[1]=expr_replace(new_w[1],sub,fun) #expr_replace_const(new_w[1],element,fun)
+		    new_expression=expr2z3_update(new_w[1],var_cstr_map)
+		    new_arg_list=extract_args(new_expression)
+                    
+                    #old_arg_list=arg_list[1]
+                    old_arg_list=new_arg_list[1]
+                    arg_list[1]='Or('+axms[1]+'==0,'+simplify_expand_sympy(arg_list[1].replace(axms[0],'('+axms[1]+'-1)'))+')'
+                    if list_var_str_new is not None and list_cstr_str_new is not None:
+                        return 'ForAll(['+str(list_var_str)+'],Implies(And('+arg_list[0]+','+str(list_cstr_str)+'),'+old_arg_list+'))'
+                    else:
+                    	return 'ForAll(['+str(list_var_str)+'],Implies(And('+arg_list[0]+','+str(list_cstr_str)+'),'+old_arg_list+'))'
+                else:
+                    return 'ForAll(['+list_var_str+'],Implies('+list_cstr_str+','+expression+'))'
+
+        elif w[0]=='c1':
+         	var_cstr_map={}
+	      	equations=[]
+	    	expression=expr2z3_update(w[1],var_cstr_map)
+	    	list_var_str=qualifier_list(var_cstr_map.keys())
+	    	list_cstr_str=cstr_list(var_cstr_map.values())
+                #add by pritom 30/08/2017
+                list_cstr_str=cstr_list_additional(list_cstr_str,var_cstr_map.keys(),const_var_map)
+	    	if list_var_str is not None and list_cstr_str is not None:
+        		 return 'ForAll(['+list_var_str+'],Implies('+list_cstr_str+','+expression+'))'
+        	else:
+        		 return expression
+        elif w[0]=='L1':
+        	var_cstr_map={}
+        	flag_constr=False
+            	lhs=expr2z3_update(w[-2],var_cstr_map)
+            	rhs=expr2z3_update(w[-1],var_cstr_map)           
+            	list_var_str=qualifier_list(var_cstr_map.keys())
+            	if isArrayFunction(w[-2][0])==True:
+            		if '_x1' in var_cstr_map.keys():
+            			del var_cstr_map['_x1']
+            		flag_constr=True
+                if '_s1' in var_cstr_map.keys():
+                    del var_cstr_map['_s1']
+                    flag_constr=True
+            	list_cstr_str=cstr_list(var_cstr_map.values())
+            	list_cstr_str2=cstr_list(var_cstr_map.values())
+                #add by pritom 30/08/2017
+            	if list_cstr_str is not None:
+            		constant=w[2].replace('n','L')
+            		list_cstr_str='And(And('+list_cstr_str+','+w[2]+'<'+constant+'),'+constant+'>0'+')'
+            		list_cstr_str2='And(And('+list_cstr_str2+','+w[2]+'<'+constant+'+1),'+constant+'>0'+')'
+            	if 'Or' not in lhs and 'And' not in lhs and 'If' not in lhs and '/' not in lhs:
+            		lhs=convert_pow_op_fun(simplify_expand_sympy(lhs))
+            	if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+            		rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+            	if list_var_str is not None and list_cstr_str is not None:
+            		if w[0] == 'i1':
+                		return "Implies("+"ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+lhs+' == '+ rhs+"))"+","+"ForAll(["+list_var_str+"],Implies("+list_cstr_str2+","+lhs+' == '+ rhs+"))"+")"
+                	else:
+                		if flag_constr==True:
+                			return "Implies("+"ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+lhs+' == '+ rhs+"))"+","+"ForAll(["+list_var_str+"],Implies("+list_cstr_str2+","+lhs+' == '+ rhs+"))"+")"
+                		else:
+                			return "Implies("+'ForAll(['+list_var_str+'],'+lhs+' == '+ rhs+")"+","+'ForAll(['+list_var_str+'],'+lhs+' == '+ rhs+")"+")"
+            	else:
+                	return "Implies("+lhs+' == '+ rhs+","+lhs+' == '+ rhs+")"
+        elif w[0]=='L2':
+        	var_cstr_map={}
+        	flag_constr=False
+            	lhs=expr2z3_update(w[2],var_cstr_map)
+            	rhs=expr2z3_update(w[3],var_cstr_map)           
+            	list_var_str=qualifier_list(var_cstr_map.keys())
+
+            	list_cstr_str=cstr_list(var_cstr_map.values())
+            	list_cstr_str2=cstr_list(var_cstr_map.values())
+
+            	if list_cstr_str is not None:
+            		constant=w[1].replace('n','L')
+            		list_cstr_str='And(And('+list_cstr_str+','+w[1]+'<'+constant+'),'+constant+'>0'+')'
+            		list_cstr_str2='And(And('+list_cstr_str+','+w[1]+'<'+constant+'+1),'+constant+'>0'+')'
+            	if 'Or' not in lhs and 'And' not in lhs and 'If' not in lhs and '/' not in lhs:
+            		lhs=convert_pow_op_fun(simplify_expand_sympy(lhs))
+            	if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+            		rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+            	if list_var_str is not None and list_cstr_str is not None:
+            		return "Implies("+"ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+lhs+"))"+","+"ForAll(["+list_var_str+"],Implies("+list_cstr_str2+","+rhs+"))"+")"
+            	else:
+                	return "Implies("+lhs+","+rhs+")"
+        elif w[0] == 'R':
+            var_cstr_map={}
+            lhs=expr2z3_update(w[2],var_cstr_map)
+            rhs=expr2z3_update(w[3],var_cstr_map)
+            list_var_str=qualifier_list(w[1])
+            if list_var_str is not None:
+                return 'ForAll(['+list_var_str+'],'+lhs+' == '+ rhs+")"
+            else:
+                return lhs+' == '+ rhs
+        elif w[0] == 'RE':
+            var_cstr_map={}
+            if len(w[2])==0:
+                lhs=None
+            else:
+                lhs=expr2z3_update(w[2],var_cstr_map)
+            rhs=expr2z3_update(w[3],var_cstr_map)
+            if len(w[1])==0:
+                list_var_str=None
+            else:
+                list_var_str=qualifier_list(w[1])
+            if list_var_str is not None:
+                if lhs!='' and lhs is not None:
+                    return 'ForAll(['+list_var_str+'],Implies('+lhs+','+rhs+"))"
+                else:
+                    return 'ForAll(['+list_var_str+'],'+rhs+")"
+            elif lhs!='' and lhs is not None:
+                return 'Implies('+lhs+','+rhs+")"
+            else:
+                return rhs
+        else:
+            return expression
+
+
+
+
+
+
+
+#convert wff to z3 constraint
+def wff2z3_update4(w,var_dim_map,const_var_map):
+        if w[0] == 'e' or w[0] == 'i0' or w[0] == 'i1':
+            var_cstr_map={}
+            flag_constr=False
+            lhs=expr2z3_update(w[-2],var_cstr_map)
+            rhs=expr2z3_update(w[-1],var_cstr_map) 
+            list_var_str=qualifier_list(var_cstr_map.keys())
+            #print '----------------------'
+            #print list_var_str
+            #print '----------------------'
+            if isArrayFunction(w[-2][0])==True:
+            	if '_x1' in var_cstr_map.keys():
+            		del var_cstr_map['_x1']
+            	flag_constr=True
+            if '_s1' in var_cstr_map.keys():
+                del var_cstr_map['_s1']
+                flag_constr=True
+            list_cstr_str=cstr_list(var_cstr_map.values())
+            #add by pritom 30/08/2017
+            if flag_constr==True:
+                if  w[-2][1][0] in var_dim_map.keys():
+                    list_cstr_str_temp=None
+                    list_cstr_str_temp=cstr_list_additional1(list_cstr_str_temp,var_cstr_map.keys(),var_dim_map[w[-2][1][0]].getDimensions().keys(),var_dim_map[w[-2][1][0]].getDimensions())
+                    if list_cstr_str_temp is not None:
+                        if list_cstr_str is None:
+                            list_cstr_str = list_cstr_str_temp
+                        else:
+                            list_cstr_str = "And("+list_cstr_str +','+ list_cstr_str_temp+")"
             list_cstr_str=cstr_list_additional(list_cstr_str,var_cstr_map.keys(),const_var_map)
             if 'Or' not in lhs and 'And' not in lhs and 'If' not in lhs and '/' not in lhs:
             	lhs=convert_pow_op_fun(simplify_expand_sympy(lhs))
@@ -1962,10 +2271,6 @@ def wff2z3_update1(w,const_var_map):
             return expression
 
 
-
-
-
-
 #convert wff to z3 constraint
 def wff2z3_update_postCond(w):
         if w[0] == 'e' or w[0] == 'i0' or w[0] == 'i1':
@@ -1979,7 +2284,9 @@ def wff2z3_update_postCond(w):
             if isArrayFunction(w[-2][0])==True:
 	    	del var_cstr_map['_x1']
             	flag_constr=True
-            
+            if '_s1' in var_cstr_map.keys():
+                del var_cstr_map['_s1']
+                flag_constr=True
             list_cstr_str=cstr_list(var_cstr_map.values())
             if 'Or' not in lhs and 'And' not in lhs and 'If' not in lhs and '/' not in lhs:
             	lhs=convert_pow_op_fun(simplify_expand_sympy(lhs))
@@ -2209,6 +2516,7 @@ def getAllCondtion(w,condition_map):
 	        if 'ite' not in str(rhs):
 	        	rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
 	        extract_conditions(rhs,condition_map)
+        
 
 def extract_conditions(expression,condition_map):
 	if 'If' in expression:
@@ -2278,11 +2586,9 @@ def cstr_list_additional(list_cstr_str,list_cstr,const_var_map):
         var=list_cstr[-1]
         del list_cstr[-1]
         if list_cstr_str is None:
-            list_cstr_str=cstr_list(list_cstr)
+            list_cstr_str=cstr_list_additional(list_cstr_str,list_cstr,const_var_map)
         else:
-            result = cstr_list(list_cstr)
-            if result is not None:
-                list_cstr_str="And("+result+","+list_cstr_str+")"
+            list_cstr_str = cstr_list_additional(list_cstr_str,list_cstr,const_var_map)
         if var in const_var_map.keys():
             if list_cstr_str is None:
                 return var+"<"+const_var_map[var]
@@ -2290,6 +2596,28 @@ def cstr_list_additional(list_cstr_str,list_cstr,const_var_map):
                 return "And("+var+"<"+const_var_map[var]+","+list_cstr_str+")"
         else:
             return list_cstr_str;
+
+
+def cstr_list_additional1(list_cstr_str,variable_list,list_cstr,const_var_map):
+    if len(list_cstr)==0:
+        return list_cstr_str;
+    else:
+        var=list_cstr[-1]
+        del list_cstr[-1]
+        if list_cstr_str is None:
+            list_cstr_str = cstr_list_additional1(list_cstr_str,variable_list,list_cstr,const_var_map)
+        else:
+            result = cstr_list_additional1(list_cstr_str,variable_list,list_cstr,const_var_map)
+            if result is not None:
+                list_cstr_str="And("+result+","+list_cstr_str+")"
+        if var in const_var_map.keys() and var in variable_list:
+            if list_cstr_str is None:
+                return var+"<"+const_var_map[var]
+            else:
+                return "And("+var+"<"+const_var_map[var]+","+list_cstr_str+")"
+        else:
+            return list_cstr_str;
+
 
 
 
@@ -2446,6 +2774,13 @@ def eqset2constraintlist_update(d):
         equation_list.append(wff2z3_update(d[x]))
     return equation_list    
     
+
+
+def eqset2constraintlist4_update(d,var_dim_map,const_var_map):
+    equation_list=[]
+    for x in d:
+        equation_list.append(wff2z3_update4(d[x],var_dim_map,const_var_map))
+    return equation_list 
     
     
     
@@ -2547,13 +2882,14 @@ def translate1(p,v,flag):
 	    #print o
             #print a
             #print '--------------------'
-            print('Output for '+fn+':')
+            #print('Output for '+fn+':')
             f,o,a,cm = rec_solver(f,o,a)
             #cm=[]          
             #print f
             #print o
             #print a
             
+            organizeFreeVariable(f,o,a,v)
             
             f,o,a,cm = getDummyFunction(f,o,a,cm)
             #f,o,a,cm = update__VERIFIER_nondet(f,o,a,cm)
@@ -2568,6 +2904,7 @@ def translate1(p,v,flag):
             #assert_key=[]
             
             #assert_key_map={}
+            
             
             f_map[fn]=f
 	    o_map[fn]=o
@@ -2586,21 +2923,21 @@ def translate1(p,v,flag):
 	    a_map[fn]=a
             cm_map[fn]=cm
             
-            output_axioms_fn(f,o,a)
-            print('\n4. Assumption :')
-            for x in assume_list:
-            	if x[0]=='i1':
-	     		print 'ForAll '+x[2]+' ( '+ expr2string1(x[4])+' ) '
-	    	else:
-	     		if x[0]!='i0':
-                    		print wff2string1(x)
-            print('\n5. Assertion :')
-            for x in assert_list:
-                if x[0]=='i1':
-                    print 'ForAll '+x[2]+' ( '+ expr2string1(x[4])+' ) '
-                else:
-                	if x[0]!='i0':
-                    		print wff2string1(x)
+            #output_axioms_fn(f,o,a)
+            #print('\n4. Assumption :')
+            #for x in assume_list:
+            #	if x[0]=='i1':
+	    # 		print 'ForAll '+x[2]+' ( '+ expr2string1(x[4])+' ) '
+	    #	else:
+	    # 		if x[0]!='i0':
+            #        		print wff2string1(x)
+            #print('\n5. Assertion :')
+            #for x in assert_list:
+            #    if x[0]=='i1':
+            #        print 'ForAll '+x[2]+' ( '+ expr2string1(x[4])+' ) '
+            #    else:
+            #    	if x[0]!='i0':
+            #        		print wff2string1(x)
         return f_map,o_map,a_map,cm_map,assert_list_map,assume_list_map,assert_key_map
         
     elif p[1]=='fun':
@@ -2693,7 +3030,7 @@ def organizeOutput(f,o,a,vfacts):
             if info_list[1]=='array' and '_PROVE' not in vfact and '_ASSUME' not in vfact and len(element_list)==2:
                 array_list.append(vfact)
     
-    
+
     for e in f:
         if isArrayFunction(e)==True:
             if len(array_list)>0:
@@ -2725,6 +3062,40 @@ def organizeOutput(f,o,a,vfacts):
     return new_f,new_o,new_a
 
 
+def organizeFreeVariable(f,o,a,vfacts):
+    struct_type_list=[]
+    for vfact in vfacts.keys():
+        info_list=vfacts[vfact]
+        for info in info_list:
+            if info_list[info][1] not in ['int','short','unsigned','long','char','float','double','array']:
+                struct_type_list.append(info)
+    
+    for x in o:
+        e=o[x]
+        if  e[0]=='e':
+            if is_Stuct(e[-2][0],struct_type_list):
+                e[-1] = expr_replace(e[-1],eval("['_x1']"),eval("['_s1']"))
+                e[-2] = expr_replace(e[-2],eval("['_x1']"),eval("['_s1']"))
+    
+    for e in a:
+        if e[0]=='i1' or e[0]=='i0':
+            if is_Stuct(e[-2][0],struct_type_list):
+                e[-1] = expr_replace(e[-1],eval("['_x1']"),eval("['_s1']"))
+                e[-2] = expr_replace(e[-2],eval("['_x1']"),eval("['_s1']"))
+
+            
+
+
+
+def is_Stuct(var,struct_type_list):
+    status=False
+    for x in struct_type_list:
+        temp=var.replace(x,'').strip()
+        if is_number(temp)==True:
+            status=True
+    return status
+        
+        
 
 
 
@@ -3632,7 +4003,7 @@ def isBoolVariable( variable ):
 #expression='n+1'
 
 def replaceAddOperator(expression):
-	p = regex.compile(r'[A-Za-z|\d|\)][+][A-Za-z|\d|\(]')
+	p = regex.compile(r'[A-Za-z|\d|\)|\]][+][A-Za-z|\d|\(|\]]')
 	result=(p.sub(lambda m: m.group().replace("+", " + "), expression))
 	result=replaceAddOperator1(result)
 	return result
@@ -3813,7 +4184,16 @@ def writeLogFile(filename , content):
     		appendingFile( filename , content )
 	else:
     		writtingFile( currentdirectory+"/"+filename , content )
+                
 
+"""
+Wrtitting the contain on file 
+"""
+def writtingWittness( filename , content ):
+	if os.path.isfile(filename):
+    		writtingFile( filename , content )
+	else:
+    		writtingFile( filename , content )
 
 
 """
@@ -4124,12 +4504,12 @@ def simplify_expand_sympy(expression):
         		leftin,rightin,axioms[0]=parenthesesOrganizer( axioms[0] ,left ,right)
         		axm=axioms[0].split('%')
         		if left is not None and right is not None:
-        			expression=left+leftin+str(simplify_sympy(axm[0]))+'%'+str(simplify_sympy(axm[1]))+rightin+'=='+str(simplify_sympy(axioms[1]))+right
+        			expression="("+left+leftin+str(simplify_sympy(axm[0]))+'%'+str(simplify_sympy(axm[1]))+rightin+')==('+str(simplify_sympy(axioms[1]))+right+")"
         		else:
-        			expression=left+str(simplify_sympy(axm[0]))+'%'+str(simplify_sympy(axm[1]))+'=='+str(simplify_sympy(axioms[1]))+right
+        			expression="("+left+str(simplify_sympy(axm[0]))+'%'+str(simplify_sympy(axm[1]))+')==('+str(simplify_sympy(axioms[1]))+right+")"
         	
         	else:
-        		expression=left+str(simplify_sympy(axioms[0]))+'=='+str(simplify_sympy(axioms[1]))+right
+        		expression="("+left+str(simplify_sympy(axioms[0]))+')==('+str(simplify_sympy(axioms[1]))+right+")"
         		#expression=left+str(pow_to_mul(powsimp(sympify(axioms[0])).expand(basic=True)))+'=='+str(powsimp(pow_to_mul(sympify(axioms[1])).expand(basic=True)))+right
         else:
         	if '%' in axioms[0]:
@@ -4390,6 +4770,7 @@ Test Case 4
 
 """
 def solve_rec(e1,e2):
+        global fun_call_map
 	lefthandstmt=None
 	righthandstmt=None
 	righthandstmt_d=None
@@ -4460,6 +4841,7 @@ def solve_rec(e1,e2):
 					result=translatepowerToFun(str(result))
                                         
 				expression=str(str(term2)+"="+str(result))
+				fun_call_map={}
 				parser = c_parser.CParser()
                                 ast = parser.parse("void test(){"+expression+";}")
                                 statement_temp=ast.ext[0].body.block_items[0]
@@ -4511,6 +4893,7 @@ def simplifyIteStatement(statement):
 Recurrence Solver After Translation
 """
 def rec_solver(f,o,a):
+    global fun_call_map
     constant_fun_map={}
     equation_map={}
     base_map={}
@@ -4537,12 +4920,13 @@ def rec_solver(f,o,a):
 	for equation in equation_map:
             e1=equation_map[equation]
 	    equation_base=str(simplify(equation).subs(simplify(str(e1[2])+"+1"),0))
-	    e2=base_map[equation_base]
-	    result=solve_rec(e1,e2)
-	    if result is not None:
-                a.remove(base_map[equation_base])
-		del base_map[equation_base]
-		solution_map[equation]=result
+	    if equation_base in base_map.keys():
+                e2=base_map[equation_base]
+                result=solve_rec(e1,e2)
+                if result is not None:
+                    a.remove(base_map[equation_base])
+                    del base_map[equation_base]
+                    solution_map[equation]=result
 	for equation in solution_map:
             a.remove(equation_map[equation])
 	    del equation_map[equation]
@@ -4554,6 +4938,7 @@ def rec_solver(f,o,a):
 	    #p = getParser()
 	    #tree = p.parse_expression(constant)
 	    #constant=eval(expressionCreator(tree))
+            fun_call_map={}
             parser = c_parser.CParser()
             ast = parser.parse("void test(){"+str(constant)+";}")
             statement_temp=ast.ext[0].body.block_items[0]
@@ -4572,6 +4957,73 @@ def rec_solver(f,o,a):
 
 
 
+def rec_solver_tactic8(f,o,a,assertion):
+    global fun_call_map
+    constant_fun_map={}
+    equation_map={}
+    base_map={}
+    for axiom in a:
+        if axiom[0]=='i1':
+             lefthandstmt=expr2string1(axiom[3])
+	     lefthandstmt=lefthandstmt.strip()
+             if 'array' not in lefthandstmt:
+                equation_map[str(simplify(lefthandstmt))]=axiom
+	if axiom[0]=='i0':
+	     lefthandstmt=expr2string1(axiom[2])
+	     lefthandstmt=lefthandstmt.strip()
+	     base_map[str(simplify(lefthandstmt))]=axiom
+	if axiom[0]=='s1':
+	     equ=expr2string1(axiom[1])
+	     if '->' in equ:
+                 axiomes=equ.split('->')
+		 axiomes[0]=simplify(str(axiomes[0]))
+		 variables=str(axiomes[0]).split('<')
+		 variables[0]=variables[0].strip()
+		 variables[1]=variables[1].strip()
+		 constant_fun_map[variables[0]]=variables[1]
+    while True:
+        solution_map={} 
+	for equation in equation_map:
+            e1=equation_map[equation]
+	    equation_base=str(simplify(equation).subs(simplify(str(e1[2])+"+1"),0))
+	    if equation_base in base_map.keys():
+                e2=base_map[equation_base]
+                result=solve_rec(e1,e2)
+                if result is not None:
+                    a.remove(base_map[equation_base])
+                    del base_map[equation_base]
+                    solution_map[equation]=result
+	for equation in solution_map:
+            a.remove(equation_map[equation])
+	    del equation_map[equation]
+	    e=solution_map[equation]
+	    e1=copy.deepcopy(e)
+	    variable=e[2]
+	    a=solnsubstitution(a,e[3],e[4])
+	    constant=constant_fun_map[variable]
+	    #p = getParser()
+	    #tree = p.parse_expression(constant)
+	    #constant=eval(expressionCreator(tree))
+            fun_call_map={}
+            parser = c_parser.CParser()
+            ast = parser.parse("void test(){"+str(constant)+";}")
+            statement_temp=ast.ext[0].body.block_items[0]
+            constant=eval(expressionCreator_C(statement_temp))
+	    variable_list=eval("expres('"+variable+"')")
+            
+	    e1[3]=expr_replace(e1[3],variable_list,constant)
+	    e1[4]=expr_replace(e1[4],variable_list,constant)
+	    a=solnsubstitution(a,e1[3],e1[4])
+            if assertion[0]=='s0':
+                assertion[-1]=expr_replace(assertion[-1],e1[3],e1[4])
+            else:
+                assertion=solnsubstitution(assertion,e1[3],e1[4])
+	    for x in o:
+                stmt=o[x]
+		stmt[2]=expr_replace(stmt[2],e1[3],e1[4])
+	if len(equation_map)==0 or len(solution_map)==0:
+            break
+    return f,o,a,constant_fun_map,assertion
 
 
     
@@ -6398,11 +6850,11 @@ def prove_auto_process(program):
 		print "Something is Wrong"
 		return
 	if program is not None:
-		print '\n----Proving Process----\n'
+		#print '\n----Proving Process----\n'
 		for name in program.getAxiomeMap():
                         if 'main' in name:
-                            print
-                            print 'Function Name--'+name
+                            #print
+                            #print 'Function Name--'+name
                         
                             axiom=program.getAxiomeMap()[name]
                             
@@ -6469,10 +6921,10 @@ def prove_auto_process(program):
                             #print '-----------------------------'
                             #prove_assert_tactic4(axiom,witnessXml)
                             #print '-----------------------------'
-                            #return
+                            main_status=None
                             for p_condition in post_condition.keys():
                                     axiom.setAsserts((p_condition,post_condition[p_condition]))
-                                
+                                    #update_assertion(post_condition[p_condition],axiom,witnessXml)
                                     var_cstr_map={}
                                     array_map={}
                                     isQuantified=None
@@ -6486,12 +6938,13 @@ def prove_auto_process(program):
                                         array_element_list(post_condition[p_condition][1],array_map)
                                         
                                     if isQuantified is None or len(array_map.keys())==0:
-                                        
+                                        #status=prove_assert_tactic4_update1(axiom,witnessXml)
                                         status=prove_assert_tactic1(axiom,witnessXml)
                                         if "Successfully Proved" in status:
-                                            print "Successfully Proved"
-                                        elif "Counter Example" in status:
-                                            print status
+                                            main_status="True"
+                                        #elif "Counter Example" in status:
+                                        #    main_status="Unknown"
+                                            #print status
                                         #elif "Nothing To Prove" in status:
                                         #    print 'No Assertion to Prove'
                                         else:
@@ -6504,36 +6957,63 @@ def prove_auto_process(program):
                                             #        print status
                                             #    else:
                                             #        print "Failed to Prove"
-                                            print "Failed to Prove"
+                                            #print "Failed to Prove"
                                             if len(array_map.keys())==0:
                                                 status=prove_assert_tactic2(axiom,witnessXml)
                                                 if "Successfully Proved" in status:
-                                                    print "Successfully Proved"
-                                                elif "Counter Example" in status:
-                                                    print status
+                                                    main_status="True"
+                                                #elif "Counter Example" in status:
+                                                #    main_status='Unknown'
                                                 #elif "Nothing To Prove" in status:
                                                 #    print 'No Assertion to Prove'
                                                 else:
                                                     status=prove_assert_tactic3(axiom,witnessXml)
                                                     if "Successfully Proved" in status:
-                                                        print "Successfully Proved"
-                                                    elif "Counter Example" in status:
-                                                        print status
+                                                        main_status="True"
+                                                    #elif "Counter Example" in status:
+                                                    #    main_status="True"
                                                     else:
-                                                        print "Failed to Prove"
+                                                        status=prove_assert_tactic8(axiom,witnessXml)
+                                                        if "Successfully Proved" in status:
+                                                            main_status="True"
+                                                        #elif "Counter Example" in status:
+                                                        #    main_status="Unknown"
+                                                        else:
+                                                            status=prove_assert_tactic9(axiom,witnessXml)
+                                                            if "Successfully Proved" in status:
+                                                                main_status="True"
+                                                            elif "Counter Example" in status:
+                                                                main_status = "Unknown"
+                                                            else:
+                                                                status=prove_assert_tactic10(axiom,witnessXml)
+                                                                if "Successfully Proved" in status:
+                                                                    main_status = "True"
+                                                                else:
+                                                                     status=prove_assert_tactic11(axiom,witnessXml)
+                                                                     if "Successfully Proved" in status:
+                                                                        main_status="True"
+                                                                     else:
+                                                                        main_status="Unknown"
                                                     
                                             #print "Failed to Prove"
                                     else:
-                                        status=prove_assert_tactic4(axiom,witnessXml)
+                                        status=prove_assert_tactic4_update1(axiom,witnessXml)
+                                        #status=prove_assert_tactic4(axiom,witnessXml)
                                         if "Successfully Proved" in status:
-                                            print "Successfully Proved"
-                                        elif "Counter Example" in status:
-                                            print status
+                                            main_status="True"
                                         else:
-                                            print "Failed to Prove"
+                                            main_status= "Unknown"
+                                    if main_status is "Unknown" or main_status is None:
+                                        print "Unknown"
+                                        return
+                if main_status is "True":
+                    print 'True'
+                else:
+                    print "Unknown"
+                
                 end_time=current_milli_time()
-                print "Time Taken by Proving Process--"
-                print end_time-start_time
+                #print "Time Taken by Proving Process--"
+                #print end_time-start_time
 			
 #w=['s0', ['ite', ['>', ['__VERIFIER_nondet_int2'], ['0']], ['ite', ['>', ['__VERIFIER_nondet_int3'], ['0']], ['ite', ['>=', ['__VERIFIER_nondet_int4'], ['0']], ['ite', ['and', ['!=', ['__VERIFIER_nondet_int4'], ['0']], ['>=', ['-', ['__VERIFIER_nondet_int2'], ['1']], ['__VERIFIER_nondet_int4']]], ['ite', ['>', ['__VERIFIER_nondet_int8'], ['0']], ['<=', ['0'], ['cp7', ['_N1']]], ['0']], ['0']], ['0']], ['0']], ['0']]]
 		
@@ -6630,7 +7110,7 @@ def prove_assert_tactic1(axiom,witnessXml):
                 			pre_condition.append(rhs)
 			
 	for x in post_condition:
-		print('\nAssertion To Prove:'+x)
+		#print('\nAssertion To Prove:'+x)
 		temp_post_condition=[]
 		temp_post_condition.append(x)
 		if post_condition is not None:
@@ -6809,9 +7289,9 @@ def prove_assert_tactic2(axiom,witnessXml):
                                 
                                 invariantstmtdisplay=expr2z3_update_postCond(temp_e_assume,{})
                                 
-				print " Try to prove following using induction on "+loop_var
-				print "ForAll("+loop_var+",Implies("+loop_var+">=0,"+str(invariantstmtdisplay)+"))"
-				print "Base Case"
+				#print " Try to prove following using induction on "+loop_var
+				#print "ForAll("+loop_var+",Implies("+loop_var+">=0,"+str(invariantstmtdisplay)+"))"
+				#print "Base Case"
 				writeLogFile( "j2llogs.logs" , "\nBase Case \n"+str(basecasestmt)+"\n" )
 				status=query2z3(constraint_list,str(basecasestmt),update_vfact,axiom.getInputvariable(),witnessXml)
 				writeLogFile( "j2llogs.logs" , "\nResult \n"+str(status)+"\n" )
@@ -6822,11 +7302,11 @@ def prove_assert_tactic2(axiom,witnessXml):
 						for key in condition_map.keys():
 							case_list.append(key.replace(loop_var,variable))
 							case_list.append('Not('+key.replace(loop_var,variable)+')')
-					print "Successfully Proved"
-					print "Inductive Step"
-					print "Inductive Assumption"
+					#print "Successfully Proved"
+					#print "Inductive Step"
+					#print "Inductive Assumption"
 					#print invariantstmt
-					print inductiveassum
+					#print inductiveassum
 					updated_equation=[]
 					updated_vfact=[]
 					for equation in constraint_list:
@@ -6920,7 +7400,7 @@ def prove_assert_tactic2(axiom,witnessXml):
 				w3.append('c1')
 				w3.append(e_in_step)
 				basecasestmt=wff2z3_update_postCond(w1)
-				print basecasestmt
+				#print basecasestmt
 				#invariantstmt=wff2z3_update_postCond(w2)
 				inductiveassum=wff2z3_update_postCond(w2)
                                 
@@ -6930,9 +7410,9 @@ def prove_assert_tactic2(axiom,witnessXml):
                                 invariantstmtdisplay=expr2z3_update_postCond(temp_e_assume,{})
                                 
 				#print inductiveassum
-				print " Try to prove following using induction on "+loop_var
-				print "ForAll("+loop_var+",Implies("+loop_var+">=0,"+str(invariantstmtdisplay)+"))"
-				print "Base Case"
+				#print " Try to prove following using induction on "+loop_var
+				#print "ForAll("+loop_var+",Implies("+loop_var+">=0,"+str(invariantstmtdisplay)+"))"
+				#print "Base Case"
 				writeLogFile( "j2llogs.logs" , "\nBase Case \n"+str(basecasestmt)+"\n" )
 				status=query2z3(constraint_list,str(basecasestmt),update_vfact,axiom.getInputvariable(),witnessXml)
 				writeLogFile( "j2llogs.logs" , "\nResult \n"+str(status)+"\n" )
@@ -6943,11 +7423,11 @@ def prove_assert_tactic2(axiom,witnessXml):
 						for key in condition_map.keys():
 							case_list.append(key.replace(loop_var,variable))
 							case_list.append('Not('+key.replace(loop_var,variable)+')')
-					print "Successfully Proved"
-					print "Inductive Step"
-					print "Inductive Assumption"
+					#print "Successfully Proved"
+					#print "Inductive Step"
+					#print "Inductive Assumption"
 					#print invariantstmt
-					print inductiveassum
+					#print inductiveassum
 					updated_equation=[]
 					updated_vfact=[]
 					for equation in constraint_list:
@@ -7199,7 +7679,7 @@ def prove_assert_tactic3(axiom,witnessXml):
                     
                 for x in post_condition:
                         x=wff2z3_update_postCond(x)
-                	print('\nAssertion To Prove:'+x)
+                	#print('\nAssertion To Prove:'+x)
                         wff2z3_update
                         temp_post_condition=[]
                         temp_post_condition.append(x)
@@ -7216,6 +7696,1174 @@ def prove_assert_tactic3(axiom,witnessXml):
                                 	return "Failed to Prove"
         return "Failed to Prove"
         
+def prove_assert_tactic8(axiom,witnessXml):
+	pre_condition=[]
+	post_condition=[]
+        condition_map={}
+	
+	str_value,word=axiom.getAsserts()        
+        
+        getAllCondtion_tactic8(word,condition_map)
+        for x in axiom.getOther_axioms():
+            getAllCondtion_tactic8(x,condition_map)
+        if len(condition_map.keys())>0:
+            for condition in condition_map:
+                inst_word=copy.deepcopy(word)
+                inst_other_axioms=copy.deepcopy(axiom.getOther_axioms())
+                inst_output_equations=copy.deepcopy(axiom.getOutput_equations())
+            
+                for w in inst_output_equations:
+                        x=inst_output_equations[w]
+                        x[-1] = simplify_ind_equation_tactic8(x[-1],condition_map[condition])
+                        x[-1] = simplify_ind_condition_tactic8(x[-1],axiom.getVfact())
+                    
+                for x in inst_other_axioms:
+                    if x[0] == 'e' or x[0] == 'i0' or x[0] == 'i1' or x[0] == 's0':
+                        x[-1] = simplify_ind_equation_tactic8(x[-1],condition_map[condition])
+                        x[-1] = simplify_ind_condition_tactic8(x[-1],axiom.getVfact())
+                f,inst_output_equations,inst_other_axioms,cm,inst_word = rec_solver_tactic8(axiom.getFrame_axioms(),inst_output_equations,inst_other_axioms,inst_word)
+                #post_condition.append(str_value)
+                post_condition.append(wff2z3_update1(inst_word,axiom.getConst_var_map()))
+
+			
+                for w in axiom.getAssumes():
+                        if w[0]=='i1':
+                                var_cstr_map={}
+                                rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+                                list_var_str=qualifier_list(var_cstr_map.keys())
+                                list_cstr_str=cstr_list(var_cstr_map.values())
+                                if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+                                        rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+                                if list_var_str is not None and list_cstr_str is not None:
+                                        if w[0] == 'i1':
+                                                pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+                                        else:
+                                                pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+                                else:
+                                        pre_condition.append(rhs)
+                        elif w[0]=='c1':
+                                var_cstr_map={}
+                                rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+                                list_var_str=qualifier_list(var_cstr_map.keys())
+                                list_cstr_str=cstr_list(var_cstr_map.values())
+                                if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+                                        rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+                                if list_var_str is not None and list_cstr_str is not None:
+                                        if w[0] == 'c1':
+                                                pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+                                        else:
+                                                pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+                                else:
+                                        pre_condition.append(rhs)
+                        else:
+                                if w[0]!='i0':
+                                        var_cstr_map={}
+                                        rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+                                        list_var_str=qualifier_list(var_cstr_map.keys())
+                                        list_cstr_str=cstr_list(var_cstr_map.values())
+                                        if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+                                                rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+                                        if list_var_str is not None and list_cstr_str is not None:
+                                                if w[0] == 'i1':
+                                                        pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+                                                else:
+                                                        pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+                                        else:
+                                                pre_condition.append(rhs)
+			
+                for x in post_condition:
+                        #print('\nAssertion To Prove:'+x)
+                        temp_post_condition=[]
+                        temp_post_condition.append(x)
+                        if post_condition is not None:
+                                start_time=current_milli_time()
+                                writeLogFile( "j2llogs.logs" , getTimeStamp()+"\nCommand--Prove \n"+"\nParameters--\n"+"\n Pre Condition--"+str(pre_condition)+"\n Post Condition--"+x+"\n Strategy--Direct")
+                                status=tactic1_update(f,inst_output_equations,inst_other_axioms,pre_condition,temp_post_condition,axiom.getVfact(),axiom.getInputvariable(),axiom.getConstraints(),witnessXml)
+                                #status=tactic2_update(axiom.getFrame_axioms(),axiom.getOutput_equations(),axiom.getOther_axioms(),pre_condition,temp_post_condition,axiom.getVfact(),axiom.getInputvariable(),axiom.getConstraints(),axiom.getConst_var_map())
+                                if "Successfully Proved" in status:
+                                        return "Successfully Proved"			
+                                elif "Counter Example" in status:
+                                        return status
+                                else:
+                                        return "Failed to Prove"
+	else:
+            return "Failed to Prove" 
+        return "Failed to Prove"
+
+ 
+def getAllCondtion_tactic8(w,condition_map):
+	if w[0] == 'e' or w[0] == 'i0' or w[0] == 'i1' or w[0] == 's0':
+                get_conditions_tactic8(w[-1],condition_map)
+    
+
+
+def get_conditions_tactic8(e,condition_map):
+        if e[:1]==['ite']:
+                argument=expr_args(e)
+                cond_key=expr2string1(argument[0])
+                if 'ite' not in cond_key :
+                    var_cstr_map={}
+                    rhs=expr2z3_update_postCond(argument[0],var_cstr_map)
+                    isQuantified=qualifier_list(var_cstr_map.keys())
+                    if isQuantified is None:
+                        condition_map[cond_key]=argument[0]
+                else:
+                    get_conditions_tactic8(argument[0],condition_map)
+        	get_conditions_tactic8(argument[1],condition_map)
+                get_conditions_tactic8(argument[2],condition_map)
+        elif e[:1]==['implies']:
+                argument=expr_args(e)
+                cond_key=expr2string1(argument[0])
+                if 'ite' not in cond_key:
+                    var_cstr_map={}
+                    rhs=expr2z3_update_postCond(argument[0],var_cstr_map)
+                    isQuantified=qualifier_list(var_cstr_map.keys())
+                    if isQuantified is None:
+                        condition_map[cond_key]=argument[0]
+                else:
+                    get_conditions_tactic8(argument[0],condition_map)
+        	get_conditions_tactic8(argument[1],condition_map)
+        else:
+        	for x in expr_args(e):
+                    get_conditions_tactic8(x,condition_map) 
+
+def simplify_ind_equation_tactic8(e,con_e):
+        if e[:1]==['ite']:
+        	temp=[]
+                argument=expr_args(e)
+        	for x in argument:
+        		parameter=simplify_ind_equation_tactic8(x,con_e)
+        		temp.append(parameter)
+        	if argument[0]==con_e:
+        		return argument[1]
+        	else:
+        		return e[:1]+temp
+        elif e[:1]==['implies']:
+                temp=[]
+                argument=expr_args(e)
+        	for x in argument:
+        		parameter=simplify_ind_equation_tactic8(x,con_e)
+        		temp.append(parameter)
+                if argument[0]==con_e:
+        		return argument[1]
+        	else:
+        		return e[:1]+temp
+        
+        else:
+        	return e[:1]+list(simplify_ind_equation_tactic8(x,con_e) for x in expr_args(e))
+
+
+def simplify_ind_condition_tactic8(e,vfact):
+        if e[:1]==['ite']:
+        	temp=[]
+                argument=expr_args(e)
+        	for x in argument:
+        		parameter=simplify_ind_condition_tactic8(x,vfact)
+        		temp.append(parameter)
+                temp_conl=[]
+                temp_conl.append('c1')
+                temp_conl.append(argument[0])
+        	status=query2z3_cond([],wff2z3_update(temp_conl),vfact)
+        	if 'Successfully Proved' in status:
+        		return argument[1]
+        	else:
+        		return e[:1]+temp
+        elif e[:1]==['implies']:
+                temp=[]
+                argument=expr_args(e)
+        	for x in argument:
+        		parameter=simplify_ind_condition_tactic8(x,vfact)
+        		temp.append(parameter)
+                temp_conl=[]
+                temp_conl.append('c1')
+                temp_conl.append(argument[0])
+                status=query2z3_cond([],wff2z3_update(temp_conl),vfact)
+                if 'Successfully Proved' in status:
+        		return argument[1]
+        	else:
+        		return e[:1]+temp
+        
+        else:
+        	return e[:1]+list(simplify_ind_condition_tactic8(x,vfact) for x in expr_args(e))
+
+
+
+
+def update_assertion(axiom,witnessXml):
+        global fun_call_map
+	pre_condition=[]
+	post_condition=[]
+        constraint_list=[]
+        condition_map={}
+        update_equation=[]
+        
+        small_macro_eq=[]
+        
+	for w in axiom.getAssumes():
+		if w[0]=='i1':
+			var_cstr_map={}
+			rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+			list_var_str=qualifier_list(var_cstr_map.keys())
+			list_cstr_str=cstr_list(var_cstr_map.values())
+			if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+				rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+			if list_var_str is not None and list_cstr_str is not None:
+				if w[0] == 'i1':
+					pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+				else:
+					pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+			else:
+                		pre_condition.append(rhs)
+		elif w[0]=='c1':
+			var_cstr_map={}
+			rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+			list_var_str=qualifier_list(var_cstr_map.keys())
+			list_cstr_str=cstr_list(var_cstr_map.values())
+			if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+				rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+			if list_var_str is not None and list_cstr_str is not None:
+				if w[0] == 'c1':
+					pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+				else:
+					pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+			else:
+                		pre_condition.append(rhs)
+		else:
+			if w[0]!='i0':
+				var_cstr_map={}
+				rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+				list_var_str=qualifier_list(var_cstr_map.keys())
+				list_cstr_str=cstr_list(var_cstr_map.values())
+				if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+					rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+				if list_var_str is not None and list_cstr_str is not None:
+					if w[0] == 'i1':
+						pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+					else:
+					        pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+				else:
+                			pre_condition.append(rhs)
+	
+	str_value,word=axiom.getAsserts()
+        
+	frame_axioms=eqset2constraintlist_update(axiom.getFrame_axioms())
+	for x in frame_axioms:
+		constraint_list.append(x)
+	out_axioms=eqset2constraintlist_update(axiom.getOutput_equations())
+
+	subs_list=eqset2subs_list(axiom.getOutput_equations())
+        
+	for x in out_axioms:
+		constraint_list.append(x)
+	for x in axiom.getOther_axioms(): 
+        	equations=wff2z3_update(x)
+        	equations_sp=None
+                if x[0]=='s0':
+                    if 'Implies' not in equations and 'If' not in equations and 'And' not in  equations and 'Or' not in  equations and 'Not' not in  equations and 'ForAll' and 'Exists' not in  equations and 'Implies' not in equations:
+                        if simplify(equations)!=False:
+                            constraint_list.append(equations)
+                    else:
+                        constraint_list.append(equations)
+                else:
+                    constraint_list.append(equations)
+                if x[0]=='s1':
+        		equations_sp=wff2z3SC_update(x)
+        		if equations_sp is not None:
+        			constraint_list.append(equations_sp)        		
+	for x in axiom.getConstraints():
+		constraint_list.append(x)
+	for x in pre_condition:
+        	constraint_list.append(x)
+	
+        for x in axiom.getOther_axioms():
+            if x[0]=='s0':
+                if x[-1][0]=='>=' or x[-1][0]=='<=':
+                    if isMacroPresent(expr2string1(x[-1][1]),axiom.getConst_var_map().values())==True:
+                        #print constraint_list
+                        x_new=copy.deepcopy(x)
+                        x_new[-1][0]='=='
+                        status=query2z3_cond(constraint_list,wff2z3_update1(x_new,axiom.getConst_var_map()),axiom.getVfact())
+                        if 'Successfully' in status:
+                                expression=expr2string1(x_new[-1][1])+"="+str(simplify(expr2string1(x_new[-1][2])))
+				fun_call_map={}
+				parser = c_parser.CParser()
+                                ast = parser.parse("void test(){"+expression+";}")
+                                statement_temp=ast.ext[0].body.block_items[0]
+                                #assertion[-1]=expr_replace(assertion[-1],expr_replace_power(eval(expressionCreator_C(statement_temp.rvalue))),expr_replace_power(eval(expressionCreator_C(statement_temp.lvalue))))
+                                result_list=[]
+                                result_list.append(expr_replace_power(eval(expressionCreator_C(statement_temp.rvalue))))
+                                result_list.append(expr_replace_power(eval(expressionCreator_C(statement_temp.lvalue))))
+                                small_macro_eq.append(result_list)
+
+        return small_macro_eq
+
+def isMacroPresent(value,Const_var_map):
+    for x in Const_var_map:
+        if simplify(x)==simplify(value):
+            return True
+    return False
+
+
+
+
+
+def prove_assert_tactic9(axiom,witnessXml):
+    
+    small_macro_eq = update_assertion(axiom,witnessXml)
+    
+    str_value,word=axiom.getAsserts() 
+    
+    pre_condition=[]
+    post_condition=[]
+    
+    if len(small_macro_eq)>0:
+        inst_word=copy.deepcopy(word)
+        inst_other_axioms=copy.deepcopy(axiom.getOther_axioms())
+        inst_output_equations=copy.deepcopy(axiom.getOutput_equations())
+        
+        size_before=len(inst_other_axioms)
+        
+        for y in small_macro_eq:
+            for x in inst_other_axioms:
+                if x[0]=='i1':
+                    x[-1]=expr_replace(x[-1],y[1],y[0])
+        f,inst_output_equations,inst_other_axioms,cm,inst_word = rec_solver_tactic8(axiom.getFrame_axioms(),inst_output_equations,inst_other_axioms,inst_word)
+        
+        size_after=len(inst_other_axioms)
+        
+        post_condition.append(wff2z3_update1(inst_word,axiom.getConst_var_map()))
+        
+        for w in axiom.getAssumes():
+            if w[0]=='i1':
+                var_cstr_map={}
+                rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+                list_var_str=qualifier_list(var_cstr_map.keys())
+                list_cstr_str=cstr_list(var_cstr_map.values())
+                if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+                    rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+                    if list_var_str is not None and list_cstr_str is not None:
+                        if w[0] == 'i1':
+                            pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+                        else:
+                            pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+                    else:
+                        pre_condition.append(rhs)
+            elif w[0]=='c1':
+                var_cstr_map={}
+                rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+                list_var_str=qualifier_list(var_cstr_map.keys())
+                list_cstr_str=cstr_list(var_cstr_map.values())
+                if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+                    rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+                    if list_var_str is not None and list_cstr_str is not None:
+                        if w[0] == 'c1':
+                            pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+                        else:
+                            pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+                    else:
+                        pre_condition.append(rhs)
+            else:
+                if w[0]!='i0':
+                    var_cstr_map={}
+                    rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+                    list_var_str=qualifier_list(var_cstr_map.keys())
+                    list_cstr_str=cstr_list(var_cstr_map.values())
+                    if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+                        rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+                    if list_var_str is not None and list_cstr_str is not None:
+                        if w[0] == 'i1':
+                            pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+                        else:
+                            pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+                    else:
+                        pre_condition.append(rhs)
+                        
+        if size_before!=size_after:
+            for x in post_condition:
+                #print('\nAssertion To Prove:'+x)
+                temp_post_condition=[]
+                temp_post_condition.append(x)
+                if post_condition is not None:
+                    start_time=current_milli_time()
+                    writeLogFile( "j2llogs.logs" , getTimeStamp()+"\nCommand--Prove \n"+"\nParameters--\n"+"\n Pre Condition--"+str(pre_condition)+"\n Post Condition--"+x+"\n Strategy--Direct")
+                    status=tactic1_update(f,inst_output_equations,inst_other_axioms,pre_condition,temp_post_condition,axiom.getVfact(),axiom.getInputvariable(),axiom.getConstraints(),witnessXml)
+                    #status=tactic2_update(axiom.getFrame_axioms(),axiom.getOutput_equations(),axiom.getOther_axioms(),pre_condition,temp_post_condition,axiom.getVfact(),axiom.getInputvariable(),axiom.getConstraints(),axiom.getConst_var_map())
+                    if "Successfully Proved" in status:
+                        return "Successfully Proved"			
+                    elif "Counter Example" in status:
+                        return status
+                    else:
+                        return "Failed to Prove"
+        else:
+            return "Failed to Prove"
+    else:
+
+        return "Failed to Prove"
+
+
+def prove_assert_tactic10(axiom,witnessXml):
+    p_condition,word = axiom.getAsserts()
+    new_word = copy.deepcopy(word)
+    small_macro_eq = update_assertion(axiom,witnessXml)
+    for y in small_macro_eq:
+        new_word[-1]=expr_replace(new_word[-1],y[0],y[1])
+    new_axiom = copy.deepcopy(axiom)
+    if new_word!=word:
+        new_axiom.setAsserts((p_condition,new_word))
+        status=prove_assert_tactic2(new_axiom,witnessXml)
+        if "Successfully Proved" in status:
+            return "Successfully Proved"
+        else:
+            return "Failed to Prove"
+    else:
+        return "Failed to Prove"
+    
+def prove_assert_tactic11(axiom,witnessXml):
+    small_macro_sub=[]
+    new_axiom = copy.deepcopy(axiom)
+    update_axioms=[]
+    for x in new_axiom.getOther_axioms():
+        if x[0]=='s1':
+            if x[1][2][0]=='<' and str(simplify(expr2string1(x[1][2][1]))) in axiom.getConst_var_map().keys():
+                list_info=[]
+                list_info.append(eval("['"+str(simplify(expr2string1(x[1][2][1])))+"']"))
+                list_info.append(x[1][2][2])
+                small_macro_sub.append(list_info)
+    for x in new_axiom.getOther_axioms():
+        if x[0]=='s1':
+            flag=False
+            for y in small_macro_sub:
+                if expr_find(x[1][1][2],y[0])==True:
+                    x_new = copy.deepcopy(x)
+                    x_new[1][2] = expr_replace(x_new[1][2],y[0],y[1])
+                    flag=True
+            if flag==True:
+                update_axioms.append(x_new)
+        update_axioms.append(x)
+    if update_axioms==new_axiom.getOther_axioms():
+        return "Failed to Prove"
+    else:
+        new_axiom.setOther_axioms(update_axioms)
+        status=prove_assert_tactic1(new_axiom,witnessXml)
+        if "Successfully Proved" in status:
+            return "Successfully Proved"
+        else:
+            return "Failed to Prove"
+        
+
+#New array prove method 
+
+def prove_assert_tactic4_update1(axiom,witnessXml):
+        global fun_call_map
+
+        condition_list=[]
+
+	array_fun_map={}
+        
+        array_fun_map_query={}
+        
+        array_fun_map_parameter={}
+	
+	array_var_map={}
+        
+        #Array Variables Basecase Value Map
+        
+        array_var_base_map={}
+        
+	post_condition={}
+	
+        array_degree_map={}
+	
+	array_list=[]
+	
+	counter_var_list=[]
+	
+	instant_eq=[]
+	
+	t_instant_eq=[]
+	
+	addition_eq=[]
+	
+	o_instant_eq={}
+	
+	call_var_list=[]
+	
+	array_fun=None
+	
+	array_init_map={}
+	
+	#Base Cases Query List
+	
+	base_case_query=[]
+	       
+	#Conclusions Query List
+	
+	conl_case_query=[]
+	 
+	#List of Assumptions
+	 
+	assum_list=[]
+	
+	#Variable Constant Map
+	       
+        var_const_map={}
+	
+	#List of Constraints Derived from Axoims 
+	
+	constraint_list=[]
+	
+	#Elements Return by Recursive Function 
+	
+	assum_list_ret=None
+	
+	conl_case_query_ret=None
+	
+	var_const_map_ret=None
+	
+	pre_condition=[]
+	
+	#Additional Equation
+	
+	add_equation_d=[]
+	
+	#main free variable map
+	
+	main_free_var_map={}
+	
+	for w in axiom.getAssumes():
+		if w[0]=='i1':
+			var_cstr_map={}
+			rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+			list_var_str=qualifier_list(var_cstr_map.keys())
+			list_cstr_str=cstr_list(var_cstr_map.values())
+			if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+				rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+			if list_var_str is not None and list_cstr_str is not None:
+				if w[0] == 'i1':
+					pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+				else:
+					pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+			else:
+	                	pre_condition.append(rhs)
+		elif w[0]=='c1':
+			var_cstr_map={}
+			rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+			list_var_str=qualifier_list(var_cstr_map.keys())
+			list_cstr_str=cstr_list(var_cstr_map.values())
+			if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+				rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+			if list_var_str is not None and list_cstr_str is not None:
+				if w[0] == 'c1':
+					pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+				else:
+					pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+			else:
+	                	pre_condition.append(rhs)
+		
+		
+		else:
+			if w[0]!='i0':
+				var_cstr_map={}
+				rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+				list_var_str=qualifier_list(var_cstr_map.keys())
+				list_cstr_str=cstr_list(var_cstr_map.values())
+				if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+					rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+				if list_var_str is not None and list_cstr_str is not None:
+					if w[0] == 'i1':
+						pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+					else:
+						pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+				else:
+                			pre_condition.append(rhs)
+		
+	str_value,word=axiom.getAsserts()
+	
+	for variable in axiom.getVariables():
+            variableclass=axiom.getVariables()[variable]
+            if variableclass.getDimensions() is not None:
+                array_degree_map[variable]=len(variableclass.getDimensions())
+            else:
+                array_degree_map[variable]=0
+	frame_axioms=eqset2constraintlist_update(axiom.getFrame_axioms())
+	
+	for x in frame_axioms:
+		constraint_list.append(x)
+	out_axioms=eqset2constraintlist_update(axiom.getOutput_equations())
+	#for x in out_axioms:
+	#	constraint_list.append(x)
+	
+	
+	for x in axiom.getOutput_equations():
+		if isArrayFunction(x)==True:
+			array_fun =  copy.deepcopy(axiom.getOutput_equations()[x][1])
+			array_fun[0] = x
+			array_init_map[x[1]]=array_fun
+			
+
+	
+	for [x,k,l] in axiom.getVfact():
+		if k==0 and l[0]=='array' and isArrayFinal(x)==False and not(x=='main'):
+                        if str(array_degree_map[x]) in array_init_map.keys():
+                            array_list.append(x)
+                            #array_fun_map[x]=array_init_map[str(array_degree_map[x])]
+        var_list=axiom.getConst_var_map().keys()
+         
+        f_count=0
+        for x in axiom.getOutput_equations():
+        	if isArrayFunction(x):
+        		var_e1=eval("['_x1']")
+        		for e_array in array_list:
+        			if axiom.getOutput_equations()[x][1][0][1]==str(array_degree_map[e_array]) and '_PROVE' not in e_array:
+        				new_x1 = copy.deepcopy(axiom.getOutput_equations()[x])
+        				var_array=eval("['"+e_array+"']")
+        				f_count=f_count+1
+        				new_x1[1]=expr_replace(new_x1[1],var_e1,var_array)
+        				new_x1[2]=expr_replace(new_x1[2],var_e1,var_array)
+        				o_instant_eq[x+'_'+str(f_count)]=new_x1
+		else:
+			o_instant_eq[x]=axiom.getOutput_equations()[x]
+                        
+        for e in axiom.getOther_axioms():
+        	if e[0]=='i0' and isArrayFunction(e[2][0]):
+        		for e_array in array_list:
+                                if e[2][0][1]==str(array_degree_map[e_array]) and '_PROVE' not in e_array:
+        				new_e1 = copy.deepcopy(e)
+					var_e1=eval("['_x1']")
+        				var_array=eval("['"+e_array+"']")
+        				new_e1[2]=expr_replace(new_e1[2],var_e1,var_array)
+        				new_e1[3]=expr_replace(new_e1[3],var_e1,var_array)
+                                        new_e1[3]=simplify_ind_equation(new_e1[3],array_list)
+                                        if e_array not in array_fun_map.keys() and '_n' not in expr2string1(new_e1[3]):
+                                            array_fun_map[e_array]=new_e1[3]
+                                        array_var_base_map[expr2string1(new_e1[2])]=new_e1[3]
+        				instant_eq.append(new_e1)        	
+        	elif e[0]=='i1' and isArrayFunction(e[3][0]):
+          		for e_array in array_list:
+                                if e[3][0][1]==str(array_degree_map[e_array]) and '_PROVE' not in e_array:
+            		      		new_e1 = copy.deepcopy(e)
+			        	status,array_value=findArrayInEq(new_e1[4],array_list)
+                                        status=findArrayInEqSp(new_e1[4],e_array)
+                                        if status==True:
+                                            array_value=e_array
+			        	if array_value is not None:
+        					inst_str=eval("['=',['_x1'],['"+str(array_value)+"']]")
+        				var_e1=eval("['_x1']")
+         				var_array=eval("['"+e_array+"']")
+        				if e_array==array_value:
+						new_e1[3]=expr_replace(new_e1[3],var_e1,var_array)
+						free_var_map={}
+                                                getAllFreeVariable(copy.deepcopy(new_e1[4]),inst_str,free_var_map)
+                                                if not free_var_map:
+                                                    new_e1[4]=expr_replace(expr_modify_array(new_e1[4],inst_str,free_var_map),var_e1,var_array)
+                                                else:
+
+                                                    new_e1[4]=expr_replace(expr_modify(new_e1[4],inst_str,free_var_map),var_e1,var_array)
+						new_e1[4]=simplify_ind_equation(new_e1[4],array_list)
+						for f_var in free_var_map.keys():
+							new_e1[3]=expr_replace(new_e1[3],eval("['"+f_var+"']"),free_var_map[f_var])
+							new_e1[4]=expr_replace(new_e1[4],eval("['"+f_var+"']"),free_var_map[f_var])
+						instant_eq.append(new_e1)
+					else:
+						new_e1[3]=expr_replace(new_e1[3],var_e1,var_array)
+						new_e1[4]=expr_replace(expr_else(new_e1[4]),var_e1,var_array)
+			        		instant_eq.append(new_e1)
+        	else:
+        		instant_eq.append(e)
+
+
+        update_facts=copy.deepcopy(axiom.getVfact())
+        
+        array_fun_map_query = copy.deepcopy(array_fun_map)
+
+        Super_Couter=0
+        
+        G_dgree=None
+        
+
+        for e in axiom.getOutput_equations():
+            element=axiom.getOutput_equations()[e]
+            if isArrayFunction(element[1][0]):
+                getAllCondtionArray(element,condition_list)
+        for e in condition_list:
+            var_cstr_map={}
+            pre_condition.append(expr2z3_update_postCond(e,var_cstr_map))
+            
+        for e in axiom.getOther_axioms():
+        	if e[0]=='i1' and isArrayFunction(e[3][0]):
+        		if e[2] not in call_var_list and (G_dgree is None or e[3][0][1]==G_dgree):
+                                if G_dgree is None:
+                                	G_dgree=e[3][0][1]
+        			var=e[2]
+        			const_var=e[2].replace('n','k')
+        			update_facts.append(eval("['"+const_var+"',0,['int']]"))
+        			constraint_list.append(const_var+">=0")
+                                
+                                fun_call_map={}
+                                parser = c_parser.CParser()
+                                ast = parser.parse("void test(){"+axiom.getConst_var_map()[var]+";}")
+                                statement_temp=ast.ext[0].body.block_items[0]
+                                constant=eval(expressionCreator_C(statement_temp))
+                                
+        			
+        			call_var_list.append(e[2])
+        			flag=False
+        			for variable in var_list:
+					if variable in axiom.getConst_var_map()[var]:
+        					flag=True
+        					
+        			new_e = copy.deepcopy(e)
+                                
+                                ins_array_lsit=[]
+                                
+                                ins_array_lsit = findArrayInEqlist(new_e[4],array_list,ins_array_lsit)
+                                
+                                flag=False
+                                
+        			for variable in var_list:
+					if variable in axiom.getConst_var_map()[var]:
+        					flag=True
+                                                
+                                query_ret_list=None
+                                
+                                var_const_map_ret=None
+                                
+        			if flag:
+                                        query_ret_list,var_const_map_ret = prove_assert_tactic4_update1_Rec(axiom,array_list,call_var_list,instant_eq,array_fun_map,witnessXml,main_free_var_map,array_degree_map)
+
+                                #Add1
+                                constraint_list1=copy.deepcopy(constraint_list)
+        			if query_ret_list is not None:
+                                    for query_ret in query_ret_list:
+                                        for ret_e_array in query_ret:
+                                            constraint_list1.append(wff2z3_update(query_ret[ret_e_array][1]))
+                                    for l_variable in var_const_map_ret:
+                                        update_facts.append(eval("['"+var_const_map_ret[l_variable]+"',0,['int']]"))
+                                        constraint_list1.append(var_const_map_ret[l_variable]+">=0")
+        			#	for query_ret in query_ret_list:
+        			#		if query_ret is not None:
+                                #        		for e_array in query_ret.keys():
+                                #            			constraint_list1.append(wff2z3_update(query_ret[e_array][2]))
+
+                                array_fun_map_temp={}
+                                
+                                
+                                for e_array in array_list:
+                                    
+                                        if e_array in array_fun_map.keys() and e[3][0][1]==str(array_degree_map[e_array]):
+                                            
+                                                new_e1 = copy.deepcopy(e)
+                                                
+                                                new_e2 = copy.deepcopy(new_e1)
+                                                
+                                                
+                                                inst_str=eval("['=',['_x1'],['"+str(e_array)+"']]")
+                                                
+						new_e1[3]=expr_replace(new_e1[3],eval("['_x1']"),eval("['"+e_array+"']"))
+                                                
+						free_var_map={}
+                                                
+                                                getAllFreeVariable(copy.deepcopy(new_e1[4]),inst_str,free_var_map)
+
+                                                if not free_var_map:
+                                                    
+                                                    new_e1[4]=expr_replace(expr_modify_array(new_e1[4],inst_str,free_var_map),eval("['_x1']"),eval("['"+e_array+"']"))
+                                                    
+                                                else:
+
+                                                    new_e1[4]=expr_replace(expr_modify(new_e1[4],inst_str,free_var_map),eval("['_x1']"),eval("['"+e_array+"']"))
+                                                    
+						new_e1[4]=simplify_ind_equation(new_e1[4],array_list)
+                                                
+
+                                                if e_array in ins_array_lsit:
+                                                    for f_var in free_var_map.keys():
+                                                            new_e1[3]=expr_replace(new_e1[3],eval("['"+f_var+"']"),free_var_map[f_var])
+                                                            new_e1[4]=expr_replace(new_e1[4],eval("['"+f_var+"']"),free_var_map[f_var])
+                                                
+                                                array_fun_map_temp[e_array]=expr_update_iter(new_e1[4],array_fun_map)
+                                                if e_array in ins_array_lsit:
+                                                    parameter_list=[]
+                                                    for x in range(2, int(e[3][0][1])+2):
+                                                        parameter_list.append(new_e1[3][x])
+                                                    array_fun_map_parameter[e_array]=parameter_list
+                                                new_e_left=expr_replace(copy.deepcopy(new_e1[3]),eval("['+',['"+var+"'],['1']]"),constant)
+                                                if e_array in array_fun_map_parameter.keys():
+                                                    for x in range(2, int(e[3][0][1])+2):
+                                                        new_e_left[x]=array_fun_map_parameter[e_array][x-2]
+                                                new_e2[3]=new_e_left
+                                                new_e2[4]=array_fun_map_temp[e_array]
+                                                instant_eq.append(new_e2)
+                                                add_equation_d.append(new_e2)
+                                
+                                
+                                for x in array_fun_map_temp:
+                                        array_fun_map[x]=array_fun_map_temp[x]
+                                if query_ret_list is not None:
+                                    for query_ret in query_ret_list:
+                                        for ret_e_array in query_ret:
+
+                                            ret_new_e1 = copy.deepcopy(query_ret[ret_e_array][0])
+                                            ret_new_e2 = copy.deepcopy(query_ret[ret_e_array][0])
+                                            
+                                            #update_facts.append(eval("['"+query_ret[ret_e_array][3]+"',0,['int']]"))
+                                            #constraint_list1.append(const_var+">=0")
+                                            
+                                            fun_call_map={}
+                                            ast = parser.parse("void test(){"+axiom.getConst_var_map()[ret_new_e1[2]]+";}")
+                                            statement_temp=ast.ext[0].body.block_items[0]
+                                            constant=eval(expressionCreator_C(statement_temp))
+                                            new_e_left=expr_replace(copy.deepcopy(ret_new_e1[3]),eval("['+',['"+ret_new_e1[2]+"'],['1']]"),constant)
+                                            if ret_e_array in array_fun_map_parameter.keys():
+                                                for x in range(2, int(e[3][0][1])+2):
+                                                    new_e_left[x] = array_fun_map_parameter[ret_e_array][x-2]
+                                            ret_new_e2[3]=new_e_left
+                                            ret_new_e2[4]=expr_update_iter(ret_new_e1[4],array_fun_map)
+                                            instant_eq.append(ret_new_e2)
+                                            add_equation_d.append(ret_new_e2)
+                                            
+        #return "Failed to prove"
+	post_condition[str_value]=word
+	for postcondition in post_condition.keys():
+                #print '=====================Main Proving Process====================='
+                for x in axiom.getConstraints():
+                    constraint_list.append(x)
+		#print '\nAxiomes Added\n'
+		for e in add_equation_d:
+			print wff2string1(e)
+		temp_post_condition=[]
+		#print '\n'
+		#temp_post_condition.append(wff2z3_update(post_condition[postcondition]))
+                if post_condition[postcondition][0]=='s0':
+                    post_condition[postcondition][0]='c1'
+                
+                
+                
+                #temp_post_condition.append(wff2z3_update_postCond(post_condition[postcondition]))
+                
+                
+                temp_post_condition.append(wff2z3_update4(post_condition[postcondition],axiom.getVariables(),axiom.getConst_var_map()))
+		
+		writeLogFile( "j2llogs.logs" , getTimeStamp()+"\nCommand--Prove \n"+"\nParameters--\n"+"\n Pre Condition--"+str(pre_condition)+"\n Post Condition--"+str(temp_post_condition)+"\n Strategy--Automatically Deriving Addition Axoimes\n")
+		writeLogFile( "j2llogs.logs" ,'\nQuery --\n\n'+wff2z3_update(post_condition[postcondition])+'\n')
+	
+                #status=tactic1_update(axiom.getFrame_axioms(),o_instant_eq,instant_eq,pre_condition,temp_post_condition,update_facts,axiom.getInputvariable(),constraint_list,witnessXml)	
+ 
+		status=tactic4_update(axiom.getFrame_axioms(),o_instant_eq,instant_eq,pre_condition,temp_post_condition,update_facts,axiom.getInputvariable(),constraint_list,axiom.getVariables(),axiom.getConst_var_map(),witnessXml)	
+                
+                #status="Failed To prove"
+                writeLogFile( "j2llogs.logs" ,'\nResult --'+status+'\n')
+                
+                #print '=============================================================='
+                if 'Successfully Proved' not in status:
+                    status=prove_assert_tactic5(axiom,instant_eq,post_condition[postcondition],axiom.getConst_var_map(),witnessXml)
+                    if status is None:
+                        return "Failed to prove"
+                    else:
+                        return status
+                else:
+                    return status
+
+
+                                                
+
+
+
+
+def prove_assert_tactic4_update1_Rec(axiom,array_list,call_var_list,instant_eq,array_fun_map,witnessXml,main_free_var_map,array_degree_map):
+
+       var_list=axiom.getConst_var_map().keys()
+       
+       query_map_list=[]
+       
+       query_map={}
+       
+       base_case_query=[]
+       
+       conl_case_query=[]
+       
+       assum_list=[]
+       
+       var_const_map={}
+       
+       constraint_list=[]
+       frame_axioms=eqset2constraintlist_update(axiom.getFrame_axioms())
+       for x in frame_axioms:
+       		constraint_list.append(x)
+       out_axioms=eqset2constraintlist_update(axiom.getOutput_equations())
+       for x in out_axioms:
+		constraint_list.append(x)
+       pre_condition=[]
+	
+       for w in axiom.getAssumes():
+		if w[0]=='i1':
+			var_cstr_map={}
+			rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+			list_var_str=qualifier_list(var_cstr_map.keys())
+			list_cstr_str=cstr_list(var_cstr_map.values())
+			if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in lhs:
+				rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+			if list_var_str is not None and list_cstr_str is not None:
+				if w[0] == 'i1':
+					pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+				else:
+					pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+			else:
+	                	pre_condition.append(rhs)
+		else:
+			if w[0]!='i0':
+				var_cstr_map={}
+				rhs=expr2z3_update_postCond(w[-1],var_cstr_map)
+				list_var_str=qualifier_list(var_cstr_map.keys())
+				list_cstr_str=cstr_list(var_cstr_map.values())
+				if 'Or' not in rhs and 'And' not in rhs and 'If' not in rhs and '/' not in rhs:
+					rhs=convert_pow_op_fun(simplify_expand_sympy(rhs))
+				if list_var_str is not None and list_cstr_str is not None:
+					if w[0] == 'i1':
+						pre_condition.append("ForAll(["+list_var_str+"],Implies("+list_cstr_str+","+rhs+"))")
+					else:
+						pre_condition.append('ForAll(['+list_var_str+'],'+rhs+")")
+				else:
+                			pre_condition.append(rhs)
+       
+                 
+       for e in axiom.getOther_axioms():
+        	if e[0]=='i1' and isArrayFunction(e[3][0]):
+        		if e[2] not in call_var_list:
+
+        			var=e[2]
+        			const_var=e[2].replace('n','k')
+                                var_const_map[var]=const_var
+
+                                
+                                #p = getParser()
+                                #tree = p.parse_expression(axiom.getConst_var_map()[var])
+        			#constant=eval(expressionCreator(tree))
+                                
+                                parser = c_parser.CParser()
+                                ast = parser.parse("void test(){"+axiom.getConst_var_map()[var]+";}")
+                                statement_temp=ast.ext[0].body.block_items[0]
+                                constant=eval(expressionCreator_C(statement_temp))
+                                
+                                
+        			call_var_list.append(e[2])
+        			flag=False
+        			for variable in var_list:
+					if variable in axiom.getConst_var_map()[var]:
+        					flag=True
+
+        			if not flag:
+                                	new_e = copy.deepcopy(e)
+					status,array_value=findArrayInEq(e[4],array_list)	
+					#instantiated the array value
+					if array_value is not None:
+						inst_str=eval("['=',['_x1'],['"+str(array_value)+"']]")
+					 
+					
+					for e_array in array_list:
+                                            
+                                            
+                                                if e_array in array_fun_map.keys() and e[3][0][1]==str(array_degree_map[e_array]):
+                                            
+                                                    #get Initial Array values
+                                                    array_fun=array_fun_map[e_array]
+                                                    #List of queries
+                                                    quary_list=[]
+                                                    # Construct Variable Array
+                                                    var_e1=eval("['_x1']")
+                                                    # Construct Array
+                                                    var_array=eval("['"+e_array+"']")
+                                                    #Get the copy of the equation
+                                                    new_e1 = copy.deepcopy(e)
+                                                    
+                                                    new_e2 = copy.deepcopy(new_e1)
+                                                    
+                                                    new_e3 = copy.deepcopy(new_e1)
+                                                    
+                                                    new_e3[4] = array_fun_map[e_array]
+                                                    
+                                                
+                                                    inst_str=eval("['=',['_x1'],['"+str(e_array)+"']]")
+                                                
+                                                    new_e1[3]=expr_replace(new_e1[3],eval("['_x1']"),eval("['"+e_array+"']"))
+                                                
+                                                    free_var_map={}
+                                                
+                                                    getAllFreeVariable(copy.deepcopy(new_e1[4]),inst_str,free_var_map)
+
+                                                    if not free_var_map:
+                                                    
+                                                        new_e1[4]=expr_replace(expr_modify_array(new_e1[4],inst_str,free_var_map),eval("['_x1']"),eval("['"+e_array+"']"))
+                                                    
+                                                    else:
+
+                                                        new_e1[4]=expr_replace(expr_modify(new_e1[4],inst_str,free_var_map),eval("['_x1']"),eval("['"+e_array+"']"))
+                                                    
+                                                    new_e1[4]=simplify_ind_equation(new_e1[4],array_list)
+                                                    
+                                                    new_e3[3]=expr_replace(new_e3[3],eval("['+',['"+var+"'],['1']]"),eval("['"+const_var+"']"))
+                                                    
+                                                    
+                                                    new_e3[3]=expr_replace(new_e3[3],eval("['"+var+"']"),eval("['"+const_var+"']"))
+                                                    
+
+                                                    query_list=[]
+
+                                                    query_list.append(new_e1)
+                                                    
+                                                    query_list.append(new_e3)
+                                                    
+                                                    query_list.append(var)
+                                                    
+                                                    query_list.append(const_var)
+                                                    
+                                                    query_list.append(constant)
+                                                    
+                                                    query_map[e_array]=query_list
+                        
+                                        query_map_list.append(query_map)
+                                	return query_map_list,var_const_map
+        			else:
+        				#print 'XXXXX-XXXXX'
+                                        #print main_free_var_map
+        				query_map_list_temp,var_const_map_temp=prove_assert_tactic4_update1_Rec(axiom,array_list,call_var_list,instant_eq,array_fun_map,witnessXml,main_free_var_map,array_degree_map)
+       			       				
+        				#for query_ret in query_map_list_temp:
+					#	if query_ret is not None:
+					#        	for e_array in query_ret.keys():
+                                        #    			constraint_list.append(wff2z3_update(query_ret[e_array][2]))
+        				for var_const_temp in var_const_map_temp.keys():
+        					var_const_map[var_const_temp]=var_const_map_temp[var_const_temp]
+                                                
+                                	update_facts=copy.deepcopy(axiom.getVfact())
+                                        
+                                        for e_array in array_list:
+                                            if e_array in array_fun_map.keys() and e[3][0][1]==str(array_degree_map[e_array]):
+                                                    #get Initial Array values
+                                                    array_fun=array_fun_map[e_array]
+                                                    #List of queries
+                                                    quary_list=[]
+                                                    # Construct Variable Array
+                                                    var_e1=eval("['_x1']")
+                                                    # Construct Array
+                                                    var_array=eval("['"+e_array+"']")
+                                                    #Get the copy of the equation
+                                                    new_e1 = copy.deepcopy(e)
+                                                    
+                                                    new_e2 = copy.deepcopy(new_e1)
+                                                    
+                                                    new_e3 = copy.deepcopy(new_e1)
+                                                    
+                                                    new_e3[4] = array_fun_map[e_array]
+                                                
+                                                
+                                                    inst_str=eval("['=',['_x1'],['"+str(e_array)+"']]")
+                                                
+                                                    new_e1[3]=expr_replace(new_e1[3],eval("['_x1']"),eval("['"+e_array+"']"))
+                                                
+                                                    free_var_map={}
+                                                
+                                                    getAllFreeVariable(copy.deepcopy(new_e1[4]),inst_str,free_var_map)
+
+                                                    if not free_var_map:
+                                                    
+                                                        new_e1[4]=expr_replace(expr_modify_array(new_e1[4],inst_str,free_var_map),eval("['_x1']"),eval("['"+e_array+"']"))
+                                                    
+                                                    else:
+
+                                                        new_e1[4]=expr_replace(expr_modify(new_e1[4],inst_str,free_var_map),eval("['_x1']"),eval("['"+e_array+"']"))
+                                                    
+                                                    new_e1[4]=simplify_ind_equation(new_e1[4],array_list)
+                                                    
+                                                    new_e3[3]=expr_replace(new_e1[3],eval("['+',['"+var+"'],['1']]"),eval("['"+const_var+"']"))
+                                                    
+                                                    new_e3[3]=expr_replace(new_e1[3],eval("['"+var+"']"),eval("['"+const_var+"']"))
+                                                    
+                                                    query_list=[]
+                                                    
+                                                    query_list.append(new_e1)
+                                                    
+                                                    query_list.append(new_e3)
+                                                    
+                                                    query_list.append(var)
+                                                    
+                                                    query_list.append(const_var)
+                                                    
+                                                    query_list.append(constant)
+                                                    
+                                                    query_map[ e_array]=query_list
+                                                    
+                                        for x in query_map_list_temp:
+                                            query_map_list.append(x)
+                                                    
+                                        query_map_list.append(query_map)
+
+        				return query_map_list,var_const_map				
+       return None,None			
+
+
+
+def getAllCondtionArray(w,condition_list):
+	if w[0] == 'e' or w[0] == 'i0' or w[0] == 'i1':
+	        if w[-1][0]=='ite':
+                    if isArrayFunction(w[-1][2][0]) and '_N' in expr2string1(w[-1][2]):
+                        condition_list.append(w[-1][1])
+                        if  w[-1][2][3]=='ite':
+                            getAllCondtionArray(w[-1][2],condition_list)
+
+
+
+
+
+
+
+
+
+
+def expr_update_iter(e,array_fun_map): #e,e1,e2: expr
+	if isArrayFunction(e[:1][0])==True:
+		temp=[]
+                parameter=[]
+		count=0
+                e1 = array_fun_map[e[1][0]]
+                temp.append(e[1][0])
+        	for x in expr_args(e):
+                    if count>0 and count<len(expr_args(e))-1:
+                        parameter.append(x)
+                    count=count+1
+		return expr_update_term(copy.deepcopy(e1),parameter)
+	else:
+		return e[:1]+list(expr_update_iter(x,array_fun_map) for x in expr_args(e))
+                
+
+def expr_update_term(e,parameter):
+    if isArrayFunction(e[:1][0])==True:
+            temp=[]
+            count=0
+            for x in expr_args(e):
+                if count>0 and count<len(expr_args(e)):
+                    if '_x' not in parameter[count-1][0]:
+                        temp.append(parameter[count-1])
+                    else:
+                        temp.append(x)
+                else:
+                    temp.append(x)
+                count=count+1
+            return e[:1]+temp
+    else:
+		return e[:1]+list(expr_update_term(x,parameter) for x in expr_args(e))
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def prove_assert_tactic4_test(axiom,witnessXml):
@@ -9442,7 +11090,31 @@ def findArrayInEq(e,array_list):
 		if flag:
 			return flag,arr
 	return flag,array_value
+    
+# Find array list  in equation
 
+def findArrayInEqlist(e,array_list,ins_array_lsit):
+	flag=False
+	array_value=None
+	for arr in array_list:
+		flag = expr_find(e,eval("['=',['_x1'],['"+arr+"']]"))
+		if flag:
+                    ins_array_lsit.append(arr)
+	return ins_array_lsit
+
+
+
+
+
+
+
+# Find array in equation
+
+def findArrayInEqSp(e,array):
+	flag=False
+	array_value=None
+        flag = expr_find(e,eval("['=',['_x1'],['"+array+"']]"))
+	return flag
 
 # Find array in equation
 
@@ -9768,6 +11440,7 @@ def prove_assert_tactic5(axiom,instant_eq,post_condition,cons_var_map,witnessXml
 	
 	
 def recInductionOnN(instant_eq,post_condition,cons_var_map,fun_map,axiom,witnessXml,Vfact):
+	global fun_call_map
 	
         constraint_list=[]
         frame_axioms=eqset2constraintlist_update(axiom.getFrame_axioms())
@@ -9846,6 +11519,7 @@ def recInductionOnN(instant_eq,post_condition,cons_var_map,fun_map,axiom,witness
 		#p = getParser()
 		system_N=N_map.keys()[0]
                 
+                fun_call_map={}
                 parser = c_parser.CParser()
                 ast = parser.parse("void test(){"+str(system_N)+";}")
                 statement_temp=ast.ext[0].body.block_items[0]
@@ -9868,10 +11542,10 @@ def recInductionOnN(instant_eq,post_condition,cons_var_map,fun_map,axiom,witness
 		if system_n is not None:
 			constant_var=system_n.replace('_n','_L')
                         
-                        print 'System Try To Prove'
+                        #print 'System Try To Prove'
                         #print wff2z3_update(post_condition)
-                        print wff2string1(post_condition)
-                        print "Induction Over--"+expr2string1(system_N)
+                        #print wff2string1(post_condition)
+                        #print "Induction Over--"+expr2string1(system_N)
 			
 			#Base Case Construct
 			
@@ -9880,11 +11554,11 @@ def recInductionOnN(instant_eq,post_condition,cons_var_map,fun_map,axiom,witness
 			query_base=expr_replace(query_base,system_N,eval("['1']"))
 			query_base=expr_replace(query_base,eval("['"+system_n+"']"),eval("['0']"))
                         
-			print 'Base Case -'
-			print expr2string1(system_N)+'=1'
-                        print 'System tried to prove--'
+			#print 'Base Case -'
+			#print expr2string1(system_N)+'=1'
+                        #print 'System tried to prove--'
                         #print wff2z3_update(query_base)
-                        print expr2string1(query_base[1])
+                        #print expr2string1(query_base[1])
                         
                         temp_post_condition=[]
                         temp_post_condition.append(wff2z3_update(query_base))
@@ -9909,18 +11583,18 @@ def recInductionOnN(instant_eq,post_condition,cons_var_map,fun_map,axiom,witness
 			assume_stmt=expr_replace(assume_stmt,system_N,eval("['"+constant_var+"']"))
                         
                         			
-			print "Inductive Assumption"
-                        print "when "+expr2string1(system_N)+'='+constant_var
-			print expr2string1(assume_stmt)
+			#print "Inductive Assumption"
+                        #print "when "+expr2string1(system_N)+'='+constant_var
+			#print expr2string1(assume_stmt)
 			
 			#Induction Step
 			ind_stmt=copy.deepcopy(post_condition[1])
 			ind_stmt=expr_replace(ind_stmt,system_N,eval("['+',['"+constant_var+"'],['1']]"))
 
 			
-                        print "Inductive Step"
-                        print "when "+expr2string1(system_N)+'='+constant_var+"+1"
-			print expr2string1(ind_stmt)
+                        #print "Inductive Step"
+                        #print "when "+expr2string1(system_N)+'='+constant_var+"+1"
+			#print expr2string1(ind_stmt)
 			
 			#Final Query
 			final_query=[]
@@ -9961,8 +11635,8 @@ def recInductionOnN(instant_eq,post_condition,cons_var_map,fun_map,axiom,witness
                             if ind_stmt==expand_query:
                                 return 'Failed to prove'
                             else:
-                                print 'Result'
-                                print "Failed to prove"
+                                #print 'Result'
+                                #print "Failed to prove"
                                 return recInductionOnN(update_instant_eq,expand_query_final,cons_var_map,fun_map,axiom,witnessXml,update_facts)
         return "Failed to prove"
 
@@ -11254,8 +12928,6 @@ def constructConstraints(list_var):
 
 
 
-
-
 def getParameters(e,para_list,f_cycle):
     args=expr_args(e)
     op=expr_op(e)
@@ -11344,7 +13016,7 @@ def query2z3(constraint_list,conclusion,vfact,inputmap,witnessXml):
                                                     pythonProgram+=",arraySort"
                                             else:
                                                     pythonProgram+=",RealSort()"
-                            pythonProgram+=")\n"
+                                    pythonProgram+=")\n"
 	power_flag=False
 	for equation in constraint_list:
 		if '**' in equation or 'power' in equation:
@@ -11385,7 +13057,7 @@ def query2z3(constraint_list,conclusion,vfact,inputmap,witnessXml):
 	writtingFile( "z3query.py" , finalProgram )
 	writeLogFile( "j2llogs.logs" , "\nQuery to z3 \n"+str(finalProgram)+"\n" )
 	try :
-		proc = subprocess.Popen('python '+ currentdirectory+'/z3query.py', stdout=subprocess.PIPE,shell=True)
+		proc = subprocess.Popen('python z3query.py', stdout=subprocess.PIPE,shell=True)
 		output = proc.stdout.read()
 		status=output
 	except OSError  as err:
@@ -11460,7 +13132,7 @@ def query2z3_update(constraint_list,conclusion,vfact,witnessXml):
 						pythonProgram+=",arraySort"
 					else:
 						pythonProgram+=",RealSort()"
-			pythonProgram+=")\n"
+                                pythonProgram+=")\n"
 	power_flag=False
 	for equation in constraint_list:
 		if '**' in equation or 'power' in equation:
@@ -11507,6 +13179,116 @@ def query2z3_update(constraint_list,conclusion,vfact,witnessXml):
 		print 'dharilo1'
 	return status
 
+
+
+
+"""
+
+1.Directly translate axoimes to z3 constraint 2.Change  exponential operator ** to power function
+
+"""
+def query2z3_cond(constraint_list,conclusion,vfact):
+	pythonProgram="import sys\n"
+        pythonProgram+="import os\n"
+        pythonProgram+="currentdirectory = os.path.dirname(os.path.realpath(__file__))\n"
+        pythonProgram+="sys.path.append(currentdirectory+\"/packages/setuptools/\")\n"
+        pythonProgram+="currentdirectory = os.path.dirname(os.path.realpath(__file__))\n"
+        pythonProgram+="sys.path.append(currentdirectory+\"/packages/z3/python/\")\n"
+	pythonProgram+="from z3 import *\n"
+        pythonProgram+="init(currentdirectory+\"/packages/z3\")\n"
+	pythonProgram+="set_param(proof=True)\n"
+        pythonProgram+="\ntry:\n"
+	pythonProgram+="\t_p1=Int('_p1')\n"
+	pythonProgram+="\t_p2=Int('_p2')\n"
+	pythonProgram+="\t_n=Int('_n')\n"
+        pythonProgram+="\t_bool=Int('_bool')\n"
+	pythonProgram+="\tarraySort = DeclareSort('arraySort')\n"
+	pythonProgram+="\t_f=Function('_f',IntSort(),IntSort())\n"
+        pythonProgram+="\t_ToReal=Function('_ToReal',RealSort(),IntSort())\n"
+        pythonProgram+="\t_ToInt=Function('_ToInt',IntSort(),RealSort())\n"
+    
+        duplicate_map={}
+
+	status=""
+	for [x,k,l] in vfact:
+		if k==0:
+			if ('_PROVE' not in x or '_ASSUME' not in x) and x not in duplicate_map.keys():
+				if l[0]=="int":
+					if '_N' in x:
+						pythonProgram+='\t'+x+"=Const(\'"+x+"\',IntSort())\n"
+					else:				
+						pythonProgram+='\t'+x+"=Int(\'"+x+"\')\n"
+				elif l[0]=="double":
+					pythonProgram+='\t'+x+"=Real(\'"+x+"\')\n"
+				elif l[0]=="float":
+					pythonProgram+='\t'+x+"=Real(\'"+x+"\')\n"
+                        	elif l[0]=="Bool":
+					pythonProgram+='\t'+x+"=Int(\'"+x+"\')\n"
+				elif l[0]=="constant":
+					pythonProgram+='\t'+x+"=Const(\'"+x+"\',IntSort())\n"
+				elif l[0]=="array":
+					pythonProgram+='\t'+x+"=Const(\'"+x+"\',arraySort)\n"
+				else:
+					pythonProgram+='\t'+x+"=Int(\'"+x+"\')\n"
+                                duplicate_map[x]=x
+		else:
+			if ('_PROVE' not in x or '_ASSUME' not in x) and x not in duplicate_map.keys():
+				pythonProgram+='\t'+x+"=Function(\'"+x+"\'"
+                                duplicate_map[x]=x
+				for e in l:
+					if e=="int":
+						pythonProgram+=",IntSort()"
+					elif e=="unsigned":
+						pythonProgram+=",IntSort()"
+					elif e=="long":
+						pythonProgram+=",IntSort()"
+					elif e=="Bool":
+						pythonProgram+=",IntSort()"
+					elif e=="array":
+						pythonProgram+=",arraySort"
+					else:
+						pythonProgram+=",RealSort()"
+                                pythonProgram+=")\n"
+	power_flag=False
+	for equation in constraint_list:
+		if '**' in equation or 'power' in equation:
+			power_flag=True
+	if '**' in conclusion or 'power' in conclusion:
+		power_flag=True
+	if power_flag==True:		
+		#pythonProgram+="\tpower=Function(\'power\',IntSort(),IntSort(),IntSort())\n"
+                pythonProgram+="\tpower=Function(\'power\',RealSort(),RealSort(),RealSort())\n"
+		pythonProgram+="\t_s=Solver()\n"
+		#pythonProgram+="_s.add(ForAll(x,Implies(x>0,power(x, 0)==1)))\n"
+		#pythonProgram+="_s.add(ForAll([x,y],Implies(And(x>0,y>0),power(x, y)==power(x, y-1)*x)))\n"
+		#pythonProgram+="_s.set(mbqi=True)\n"
+        	pythonProgram+="\t_s.add(ForAll([_p1],Implies(_p1>=0, power(0,_p1)==0)))\n"
+        	pythonProgram+="\t_s.add(ForAll([_p1,_p2],Implies(power(_p2,_p1)==0,_p2==0)))\n"
+        	pythonProgram+="\t_s.add(ForAll([_p1],Implies(_p1>0, power(_p1,0)==1)))\n"
+        	pythonProgram+="\t_s.add(ForAll([_p1,_p2],Implies(power(_p1,_p2)==1,Or(_p1==1,_p2==0))))\n"
+        	pythonProgram+="\t_s.add(ForAll([_p1,_p2],Implies(And(_p1>0,_p2>=0), power(_p1,_p2+1)==power(_p1,_p2)*_p1)))\n"  
+        else:
+        	pythonProgram+="\t_s=Solver()\n"
+
+	pythonProgram+="\t_s.add(ForAll([_n],Implies(_n>=0, _f(_n)==_n)))\n"
+	pythonProgram+="\t_s.set(\"timeout\","+str(500)+")\n"
+	for equation in constraint_list:
+		pythonProgram+="\t_s.add("+str(equation)+")\n"
+	finalProgram=pythonProgram
+	finalProgram+="\t_s.add(Not("+str(conclusion)+"))\n"
+        finalProgram+="\nexcept Exception as e:\n"+"\tprint \"Error(Z3Query)\""+"\n\tfile = open('j2llogs.logs', 'a')\n"+"\n\tfile.write(str(e))\n"+"\n\tfile.close()\n"+"\n\tsys.exit(1)\n"
+        finalProgram+="\ntry:\n"
+        finalProgram+="\tif sat==_s.check():\n"+"\t\tprint \"Counter Example\"\n"+"\t\tprint _s.model()\n"+"\telif unsat==_s.check():\n"+"\t\t_s.check()\n"+"\t\ttry:\n"+"\t\t\tif os.path.isfile(\'j2llogs.logs\'):\n"+"\t\t\t\tfile = open(\'j2llogs.logs\', \'a\')\n"+"\t\t\t\tfile.write(\"\\n**************\\nProof Details\\n**************\\n\"+str(_s.proof().children())+\"\\n\")\n"+"\t\t\t\tfile.close()\n"+"\t\t\telse:\n"+"\t\t\t\tfile = open(\'j2llogs.logs\', \'w\')\n"+"\t\t\t\tfile.write(\"\\n**************\\nProof Details\\n**************\\n\"+str(_s.proof().children())+\"\\n\")\n"+"\t\t\t\tfile.close()\n"+"\t\texcept Exception as e:\n"+"\t\t\tfile = open(\'j2llogs.logs\', \'a\')\n"+"\t\t\tfile.write(\"\\n**************\\nProof Details\\n**************\\n\"+\"Error\"+\"\\n\")\n"+"\t\t\tfile.close()\n"+"\t\tprint \"Successfully Proved\"\n"+"\telse:\n"+"\t\tprint \"Failed To Prove\""
+	finalProgram+="\nexcept Exception as e:\n"+"\tprint \"Error(Z3Query)\""+"\n\tfile = open('j2llogs.logs', 'a')\n"+"\n\tfile.write(str(e))\n"+"\n\tfile.close()\n"
+	writtingFile( "z3query.py" , finalProgram )
+	writeLogFile( "j2llogs.logs" , "\nQuery to z3 \n"+str(finalProgram)+"\n" )
+	try :
+		proc = subprocess.Popen('python '+currentdirectory+'/z3query.py', stdout=subprocess.PIPE,shell=True)
+		output = proc.stdout.read()
+		status=output
+	except OSError  as err:
+		print 'dharilo1'
+	return status
 
 
 
@@ -11618,7 +13400,67 @@ def tactic1_update(f,o,a,pre_condition,conclusions,vfact,inputmap,constaints,wit
 
 
 
+#For Array 
+def tactic4_update(f,o,a,pre_condition,conclusions,vfact,inputmap,constaints,allvariables,const_var_map,witnessXml):
+	global defineDetaillist
+	defineDetaillist=[]
+	constraint_list=[]
+        array_dimesion_map={}
+        for array in allvariables.keys():
+            dimesnsion= allvariables[array].getDimensions()
+            if dimesnsion is not None:
+                array_dimesion_map[array]=dimesnsion
+                
+	frame_axioms=eqset2constraintlist4_update(f,allvariables,const_var_map)
+	for x in frame_axioms:
+		constraint_list.append(x)
+	out_axioms=eqset2constraintlist4_update(o,allvariables,const_var_map)
 
+	subs_list=eqset2subs_list(o)
+	
+	
+	for x in out_axioms:
+		constraint_list.append(x)
+	for x in a: 
+        	equations=wff2z3_update4(x,allvariables,const_var_map)
+        	equations_sp=None
+                if x[0]=='s0':
+                    if 'Implies' not in equations and 'If' not in equations and 'And' not in  equations and 'Or' not in  equations and 'Not' not in  equations and 'ForAll' and 'Exists' not in  equations and 'Implies' not in equations:
+                        if simplify(equations)!=False:
+                            constraint_list.append(equations)
+                    else:
+                        constraint_list.append(equations)
+                else:
+                    constraint_list.append(equations)
+                if x[0]=='s1':
+        		equations_sp=wff2z3SC_update(x)
+        		if equations_sp is not None:
+        			constraint_list.append(equations_sp)        		
+	for x in constaints:
+		constraint_list.append(x)
+	for x in pre_condition:
+        	constraint_list.append(x)
+        filter_map={}
+        for element in defineDetaillist:
+        	if element[0] not in filter_map.keys():
+        		filter_map[element[0]]=element[0]
+        		vfact.append(element)
+	defineDetaillist=[]
+	for conclusion in conclusions:
+		writeLogFile( "j2llogs.logs" , "\nSystem try to prove \n"+str(conclusion)+"\n" )
+		if conclusion is None:
+			return "Failed to Prove"
+		if "factorial" in conclusion:
+			cfact=eval("['factorial',1,['int','int']]")
+			vfact.append(cfact)
+		status=query2z3(constraint_list,conclusion,vfact,inputmap,witnessXml)
+		writeLogFile( "j2llogs.logs" ,"\nResult \n"+str(status)+"\n" )
+		if "Successfully Proved" in status:
+			return "Successfully Proved"			
+		elif "Counter Example" in status:
+			return 	status		
+		else:
+			return "Failed to Prove"
 
 
 """
@@ -12341,6 +14183,8 @@ def programTransformation(function_body,functionMap,medthodname):
     
     pa_update_statements = organizeDeclaration(pa_update_statements)
     
+    pa_update_statements = getVariablesInit(pa_update_statements)
+    
     #print '#######3'
     #print(generator.visit(c_ast.Compound(block_items=statements)))
     #print '#######3'
@@ -12514,6 +14358,61 @@ def organizeDeclaration(update_statements):
         statements.append(statement)
     return statements
     
+
+def organizeInnerDeclartionMain(statements):
+    update_statements=[]
+    update_statements1=[]
+    dec_statements=[]
+    for statement in statements:
+        if type(statement) is c_ast.If:
+            update_statements.append(organizeInnerDeclartionIf(statement,dec_statements))
+        elif type(statement) is c_ast.While:
+            update_statements.append(c_ast.While(cond=statement.cond,stmt=c_ast.Compound(block_items=organizeInnerDeclartion(statement.stmt.block_items,dec_statements))))
+        else:
+            update_statements.append(statement)
+    for statement in dec_statements:
+        update_statements1.append(statement)
+    for statement in update_statements:
+        update_statements1.append(statement)
+    return update_statements1
+ 
+    
+def organizeInnerDeclartion(statements,dec_statements):
+    update_statements=[]
+    for statement in statements:
+        if type(statement) is c_ast.Decl:
+            dec_statements.append(statement)
+        elif type(statement) is c_ast.If:
+            update_statements.append(organizeInnerDeclartionIf(statement,dec_statements))
+        elif type(statement) is c_ast.While:
+            update_statements.append(c_ast.While(cond=statement.cond,stmt=c_ast.Compound(block_items=organizeInnerDeclartion(statement.stmt.block_items,dec_statements))))
+        else:
+            update_statements.append(statement)  
+    return update_statements
+            
+            
+def organizeInnerDeclartionIf(statement,dec_statements):
+    If_stmt=None
+    Else_stmt=None
+    if type(statement) is c_ast.If:
+        if type(statement.iftrue) is c_ast.Compound:
+            new_block_temp=organizeInnerDeclartion(statement.iftrue.block_items,dec_statements)
+            If_stmt=c_ast.Compound(block_items=new_block_temp)
+        else:
+            If_stmt=statement.iftrue
+    if type(statement.iffalse) is c_ast.Compound:
+        if statement.iffalse.block_items is not None:
+            new_block_temp=organizeInnerDeclartion(statement.iffalse.block_items,dec_statements)
+            Else_stmt=c_ast.Compound(block_items=new_block_temp)
+        else:
+            Else_stmt=statement.iffalse
+    else:
+        if type(statement.iffalse) is c_ast.If:
+            Else_stmt=organizeInnerDeclartionIf(statement.iffalse,dec_statements)
+        else:
+            Else_stmt=statement.iffalse
+    return c_ast.If(cond=statement.cond, iftrue=If_stmt, iffalse=Else_stmt)
+
 
 
 
@@ -12850,13 +14749,14 @@ def translate_backup(file_name):
 
 
 
-def prove_auto(file_name):
+def prove_auto(file_name,property=None):
 	if not(os.path.exists(file_name)): 
         	print "File not exits"
 		return
 
 	start_time=current_milli_time()
 	content=None
+        witness_path=None
 	global new_variable
 	global fail_count
 	global error_count
@@ -12919,6 +14819,10 @@ def prove_auto(file_name):
 	#ast = parse_file(file_name, use_cpp=True)
         try:
             
+            #print '##############'
+            #print struct_list
+            #print text
+            #print '##############'
             ast = parser.parse(text)
             for struct_str in struct_list:
                 
@@ -12984,7 +14888,6 @@ def prove_auto(file_name):
         except Exception as e:
             print 'Error(Find Error in Input File)'
             writeLogFile( "j2llogs.logs" ,str(e))
-            #print str(e)
             return
         #ast.show()
 	generator = c_generator.CGenerator()
@@ -13024,11 +14927,13 @@ def prove_auto(file_name):
 							structType=None
 				    			if type(param_decl.type) is c_ast.ArrayDecl:
 				    	    			degree=0
-				    	    			data_type,degree,structType=getArrayDetails(param_decl,degree)
-								variable=variableclass(param_decl.name, data_type,None,degree,None,structType)
+                                                                dimensionmap={}
+				    	    			data_type,degree,structType=getArrayDetails(param_decl,degree,dimensionmap)
+								variable=variableclass(param_decl.name, data_type,None,dimensionmap,None,structType)
 							else:
                                                                 try:
-                                                                    variable=variableclass(param_decl.name, param_decl.type.type.names[0],None,None,None,structType)
+                                                                    #variable=variableclass(param_decl.name, param_decl.type.type.names[0],None,None,None,structType)
+                                                                     variable=variableclass(param_decl.name, param_decl.type.type.names[0],None,None,None,structType)
                                                                 except Exception as e:
                                                                     print 'Error(Translation to Intermate Intermediate)'
                                                                     writeLogFile( "j2llogs.logs" ,str(e))
@@ -13051,7 +14956,8 @@ def prove_auto(file_name):
 					else:
                     				
                     				initial_value=child[1].value
-            			variable=variableclass(e.name, var_type,None,None,initial_value,structType)
+            			#variable=variableclass(e.name, var_type,None,None,initial_value,structType)
+                                variable=variableclass(e.name, var_type,None,None,initial_value,structType)
                                 program_analysis_var_decl=program_analysis_var_decl+str(generator.visit(e))+';\n'
             			externalvarmap[e.name]=variable
                                 external_var_map[e.name]=e.name
@@ -13092,15 +14998,17 @@ def prove_auto(file_name):
                                                             if type(param_decl.type) is c_ast.ArrayDecl:
                                                                     #print param_decl.show()
                                                                     degree=0
-                                                                    data_type,degree,structType=getArrayDetails(param_decl,degree)
-                                                                    variable=variableclass(param_decl.name, data_type,None,degree,None,structType)
+                                                                    dimensionmap={}
+                                                                    data_type,degree,structType=getArrayDetails(param_decl,degree,dimensionmap)
+                                                                    variable=variableclass(param_decl.name, data_type,None,dimensionmap,None,structType)
                                                             elif type(param_decl.type) is c_ast.PtrDecl:
                                                                     stmt=pointerToArray(param_decl)
                                                                     #print stmt.show()
                                                                     if stmt is not None and type(stmt.type) is c_ast.ArrayDecl:
                                                                             degree=0
-                                                                            data_type,degree,structType=getArrayDetails(param_decl,degree)
-                                                                            variable=variableclass(stmt.name, data_type,None,degree,None,structType)
+                                                                            dimensionmap={}
+                                                                            data_type,degree,structType=getArrayDetails(param_decl,degree,dimensionmap)
+                                                                            variable=variableclass(stmt.name, data_type,None,dimensionmap,None,structType)
                                                             else:				
                                                                     try:
                                                                         variable=variableclass(param_decl.name, param_decl.type.type.names[0],None,None,None,structType)
@@ -13125,14 +15033,16 @@ def prove_auto(file_name):
 								structType=None
 								if type(param_decl.type) is c_ast.ArrayDecl:
 									degree=0
-									data_type,degree,structType=getArrayDetails(param_decl,degree)
-									variable=variableclass(param_decl.name, data_type,None,degree,None,structType)
+                                                                        dimensionmap={}
+									data_type,degree,structType=getArrayDetails(param_decl,degree,dimensionmap)
+									variable=variableclass(param_decl.name, data_type,None,dimensionmap,None,structType)
 								elif type(param_decl.type) is c_ast.PtrDecl:
 									stmt=pointerToArray(param_decl)
 									if stmt is not None and type(stmt.type) is c_ast.ArrayDecl:
 										degree=0
-										data_type,degree,structType=getArrayDetails(param_decl,degree)
-										variable=variableclass(stmt.name, data_type,None,degree,None,structType)
+                                                                                dimensionmap={}
+										data_type,degree,structType=getArrayDetails(param_decl,degree,dimensionmap={})
+										variable=variableclass(stmt.name, data_type,None,dimensionmap,None,structType)
 								
 								else:	
 									try:
@@ -13160,6 +15070,9 @@ def prove_auto(file_name):
                             statements = updatePointerStruct(statements,struct_map)
                         
                             pa_statements = updatePointerStruct(pa_statements,struct_map)
+                            
+                            pa_statements = organizeInnerDeclartionMain(pa_statements)
+                            
                         
                         except Exception as e:
                             print 'Error(Translation to Intermate Intermediate)'
@@ -13167,14 +15080,13 @@ def prove_auto(file_name):
                             #print str(e)
                             return
                         
-                        
-                        
                         for temp_method in externalarraymap.keys():
                             if isVarPresnt(statements,temp_method)==True:
                                 new_statements=[]
                                 new_statements.append(externalarraymap[temp_method])
                                 statements=construct_program(new_statements+statements)
                         body_comp = c_ast.Compound(block_items=statements)
+                        localvarmap=getVariables(body_comp)
                         statements,localvarmap=addAllExtVariables(statements,externalvarmap,localvarmap)
                         statements = translateStruct(statements,localvarmap,struct_map)
                         #statements=pointerHandling(statements,pointer_list,array_list)
@@ -13188,6 +15100,37 @@ def prove_auto(file_name):
     		else:
 		    membermethod.setBody(None)
     		    membermethod.setLocalvar(None)
+    
+    	temp_functionvarmap={}
+    	
+    	for medthod in functionvarmap.keys():
+                membermethod=functionvarmap[medthod]
+                in_var_map=membermethod.getInputvar()
+                if len(in_var_map)>0:
+                    for x in in_var_map:
+                        variable=in_var_map[x]
+                        if variable.getDimensions() is not None and len(variable.getDimensions())>0:
+                            temp_functionvarmap[medthod]=functionvarmap[medthod]
+                elif medthod=='main':
+                        temp_functionvarmap[medthod]=functionvarmap[medthod]
+    	
+    	for medthod in functionvarmap.keys():
+                membermethod=functionvarmap[medthod]
+    		body=membermethod.getBody()
+    		if body is not None:
+                    if medthod=='main':
+                        statements=body.block_items
+                        statements = substituteFunBlock(statements,temp_functionvarmap,medthod,externalvarmap)
+                        body_comp = c_ast.Compound(block_items=statements)
+                        membermethod.setBody(body_comp)
+                        #body_comp = c_ast.Compound(block_items=statements)
+                        #generator = c_generator.CGenerator()
+                        #print(generator.visit(body_comp))
+    
+    	
+    	
+    	
+    	
     	#program in intermediate form
     	programeIF=[]
 
@@ -13300,6 +15243,7 @@ def prove_auto(file_name):
                         except Exception as e:
                             print 'Error(error occurred during translation intermediate format)'
                             writeLogFile( "j2llogs.logs" ,str(e))
+                            print str(e)
                             return
 		
 
@@ -13419,7 +15363,7 @@ def prove_auto(file_name):
         
 
 
-        function_substitution_test('main',programgraph_map,f_map,o_map,a_map,cycle_list)
+        function_substitution_test('main',programgraph_map,f_map,o_map,a_map,assert_map,assume_map,cycle_list)
         
         
        
@@ -13473,12 +15417,16 @@ def prove_auto(file_name):
                         
                         for x in function_vfacts:
                              vfacts.append(x)
+                    
+
         		#for element in function_vfact_map.keys():
         		#	function_vfact_list=function_vfact_map[element]
         		#	for x in function_vfact_list:
                         #                if x[0] not in vfacts2.keys():
                         #                    vfacts.append(x)
+                        f,o,a,cm,assert_list = rec_solver_tactic8(f,o,a,assert_list)
         		f,o,a,vfacts=organizeAxioms(f,o,a,vfacts)
+                        #output_axioms_fn(f,o,a)
         		axiom=axiomclass(f,o,a,membermethod.getInputvar(), vfacts, constraints,cm,assert_list,assume_list,addition_array[1])
         		axiomeMap[key]=axiom
 
@@ -13486,16 +15434,26 @@ def prove_auto(file_name):
                 #print external_var_map
                 #print program_analysis
                 #print '#######'
-                
                 end_time=current_milli_time()
-                print "Translation Time--"
-		print end_time-start_time
-                
+                #print "Translation Time--"
+		#print end_time-start_time
                 results=AssetionAnalysis(program_analysis,program_analysis_decl)
                 #print '$$$$$$$$$$$$$$$$$'
                 #print results
                 #print '$$$$$$$$$$$$$$$$$'
                 #results={}
+                #include <stdlib.h>
+                test_int_harness1="void __VERIFIER_error(void) { exit(EXIT_FAILURE); }\n"+"void __VERIFIER_assume(int cond) { if (!(cond)) { exit(EXIT_SUCCESS); }}\n"+"unsigned int __VERIFIER_nondet_int_index__ = 0;\n"+"int __VERIFIER_nondet_int() {\n"+"\tint retval;\n"+"\tswitch (__VERIFIER_nondet_int_index__) {\n"
+                test_int_harness2="\t\t}\n"+"\t\t++__VERIFIER_nondet_int_index__;\n \t\treturn retval;\n"+"\t}\n"
+                
+                test_uint_harness1="void __VERIFIER_error(void) { exit(EXIT_FAILURE); }\n"+"void __VERIFIER_assume(int cond) { if (!(cond)) { exit(EXIT_SUCCESS); }}\n"+"unsigned int __VERIFIER_nondet_uint_index__ = 0;\n"+"unsigned int __VERIFIER_nondet_uint() {\n"+"\tunsigned int retval;\n"+"\tswitch (__VERIFIER_nondet_uint_index__) {\n"
+                test_uint_harness2="\t\t}\n"+"\t\t++__VERIFIER_nondet_uint_index__;\n \t\treturn retval;\n"+"\t}\n"
+                
+                test_char_harness1="void __VERIFIER_error(void) { exit(EXIT_FAILURE); }\n"+"void __VERIFIER_assume(int cond) { if (!(cond)) { exit(EXIT_SUCCESS); }}\n"+"unsigned int __VERIFIER_nondet_char_index__ = 0;\n"+"char __VERIFIER_nondet_char() {\n"+"\tchar retval;\n"+"\tswitch (__VERIFIER_nondet_char_index__) {\n"
+                test_char_harness2="\t\t}\n"+"\t\t++__VERIFIER_nondet_char_index__;\n \t\treturn retval;\n"+"\t}\n"
+                
+                final_wittness=None
+                
                 if results is None:
                     #print 'Result--'
                     #print 'Program Terminates Failed'
@@ -13511,21 +15469,140 @@ def prove_auto(file_name):
                             if key in result:
                                 assertion=assert_key_list[key]
                                 if '_FAILED' not in key:
-                                    print 'Assertion :'+wff2z3_update_postCond(assertion)
-                                    print 'Counter Example'
+                                    #print 'Assertion :'+wff2z3_update_postCond(assertion)
+                                    print 'False'
+                                    test_int_mid=None
+                                    test_uint_mid=None
+                                    test_char_mid=None
+                                    int_mid_count=0
+                                    uint_mid_count=0
+                                    char_mid_count=0
+                                    #print results[result]
                                     for term in results[result]:
-                                        print term
+                                        if ':' in term:
+                                            value_counter=term.split(":")
+                                            if '__VERIFIER_nondet_int' in value_counter[0]:
+                                                if test_int_mid is None:
+                                                    test_int_mid='\t\t\tcase '+str(int_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    int_mid_count=int_mid_count+1
+                                                else:
+                                                    test_int_mid+='\t\t\tcase '+str(int_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    int_mid_count=int_mid_count+1
+                                            elif '__VERIFIER_nondet_uint' in value_counter[0]:
+                                                if test_uint_mid is None:
+                                                    test_uint_mid='\t\t\tcase '+str(uint_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    uint_mid_count=uint_mid_count+1
+                                                else:
+                                                    test_uint_mid+='\t\t\tcase '+str(uint_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    uint_mid_count=uint_mid_count+1
+                                            elif '__VERIFIER_nondet_char' in value_counter[0]:
+                                                if test_char_mid is None:
+                                                    test_char_mid='\t\t\tcase '+str(char_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    char_mid_count=char_mid_count+1
+                                                else:
+                                                    test_char_mid+='\t\t\tcase '+str(char_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    char_mid_count=char_mid_count+1
+                                    if test_int_mid is not None:
+                                        if final_wittness is None:
+                                            final_wittness="\n"+test_int_harness1+test_int_mid+test_int_harness2+"\n"
+                                        else:
+                                            final_wittness+="\n"+test_int_harness1+test_int_mid+test_int_harness2+"\n"
+                                            
+                                    if test_uint_mid is not None:
+                                        if final_wittness is None:
+                                            final_wittness="\n"+test_uint_harness1+test_int_mid+test_uint_harness2+"\n"
+                                        else:
+                                            final_wittness+="\n"+test_uint_harness1+test_int_mid+test_uint_harness2+"\n"
+                                            
+                                    if test_char_mid is not None:
+                                        if final_wittness is None:
+                                            final_wittness="\n"+test_char_harness1+test_char_mid+test_char_harness2+"\n"
+                                        else:
+                                            final_wittness+="\n"+test_char_harness1+test_char_mid+test_char_harness2+"\n"
+                                    if final_wittness is not None:
+                                        file_harness = getTheFileName(file_name)
+                                        if '.i' in file_harness:
+                                            file_harness=file_harness.replace('.i','-harness.c')
+                                        elif '.c' in file_harness:
+                                            file_harness=file_harness.replace('.c','-harness.c')
+                                        if witness_path==None:
+                                            #writtingWittness('witness/'+file_harness,test_int_harness1+test_int_mid+test_int_harness2)
+                                            writtingWittness(file_harness,test_int_harness1+test_int_mid+test_int_harness2)
+                                            return
+                                        else:
+                                            writtingWittness(witness_path+'/'+file_harness,test_int_harness1+test_int_mid+test_int_harness2)
+                                            return
+                                            
                                     if assertion in assert_list:
                                         assert_list.remove(assertion)
                                 else:
                                     for x in assert_list:
                                         if x[0]=='c1':
                                             if key in x[1][1][0]:
-                                                print 'Assertion :'+wff2z3_update_postCond(x)
+                                                #print 'Assertion :'+wff2z3_update_postCond(x)
                                                 assert_list.remove(x)
-                                    print 'Counter Example'
+                                    print 'False'
+                                    test_int_mid=None
+                                    test_uint_mid=None
+                                    test_char_mid=None
+                                    int_mid_count=0
+                                    uint_mid_count=0
+                                    char_mid_count=0
                                     for term in results[result]:
-                                        print term
+                                        if ':' in term:
+                                            value_counter=term.split(":")
+                                            if '__VERIFIER_nondet_int' in value_counter[0]:
+                                                if test_int_mid is None:
+                                                    test_int_mid='\t\t\tcase '+str(int_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    int_mid_count=int_mid_count+1
+                                                else:
+                                                    test_int_mid+='\t\t\tcase '+str(int_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    int_mid_count=int_mid_count+1
+                                            elif '__VERIFIER_nondet_uint' in value_counter[0]:
+                                                if test_uint_mid is None:
+                                                    test_uint_mid='\t\t\tcase '+str(uint_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    uint_mid_count=uint_mid_count+1
+                                                else:
+                                                    test_uint_mid+='\t\t\tcase '+str(uint_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    uint_mid_count=uint_mid_count+1
+                                            elif '__VERIFIER_nondet_char' in value_counter[0]:
+                                                if test_char_mid is None:
+                                                    test_char_mid='\t\t\tcase '+str(char_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    char_mid_count=char_mid_count+1
+                                                else:
+                                                    test_char_mid+='\t\t\tcase '+str(char_mid_count)+" : retval ="+value_counter[1]+";\n"
+                                                    char_mid_count=char_mid_count+1
+                                    if test_int_mid is not None:
+                                        if final_wittness is None:
+                                            final_wittness="\n"+test_int_harness1+test_int_mid+test_int_harness2+"\n"
+                                        else:
+                                            final_wittness+="\n"+test_int_harness1+test_int_mid+test_int_harness2+"\n"
+                                            
+                                    if test_uint_mid is not None:
+                                        if final_wittness is None:
+                                            final_wittness="\n"+test_uint_harness1+test_int_mid+test_uint_harness2+"\n"
+                                        else:
+                                            final_wittness+="\n"+test_uint_harness1+test_int_mid+test_uint_harness2+"\n"
+                                            
+                                    if test_char_mid is not None:
+                                        if final_wittness is None:
+                                            final_wittness="\n"+test_char_harness1+test_char_mid+test_char_harness2+"\n"
+                                        else:
+                                            final_wittness+="\n"+test_char_harness1+test_char_mid+test_char_harness2+"\n"
+                                        
+                                    if final_wittness is not None:
+                                        file_harness = getTheFileName(file_name)
+                                        if '.i' in file_harness:
+                                            file_harness=file_harness.replace('.i','-harness.c')
+                                        elif '.c' in file_harness:
+                                            file_harness=file_harness.replace('.c','-harness.c')
+                                        if witness_path==None:
+                                            #writtingWittness('witness/'+file_harness,test_int_harness1+test_int_mid+test_int_harness2)
+                                            writtingWittness(file_harness,test_int_harness1+test_int_mid+test_int_harness2)
+                                            return
+                                        else:
+                                            writtingWittness(witness_path+'/'+file_harness,test_int_harness1+test_int_mid+test_int_harness2)
+                                            return
                 
                 if len(f_list)==1 and 'main' in f_list:
                     axiommain=axiomeMap['main']
@@ -13585,12 +15662,23 @@ def prove_auto(file_name):
                     axiommain.setOther_axioms(a)
                     axiomeMap['main']=axiommain
                     #print '--------------------'
-                #return
                 program=programclass(file_name, memberfunctionmap , externalvarmap, axiomeMap, witnessXml_map) 
                 prove_auto_process(program)
                 #return program
         else:
         	print 'Error in  Translation'
+
+
+
+def getTheFileName(filename):
+    if filename is not None:
+        if '/' in filename:
+            filenames=filename.strip()
+            names=filename.split('/')
+            return names[-1]
+        else:
+            return filename
+
 
 
 #Get All Struct Variables
@@ -13754,6 +15842,15 @@ def translateStructStmt(statement,variable_map,struct_map):
                     para_list.append(statement.name)
                     return c_ast.FuncCall(name=c_ast.ID(name=struct_name+"_"+statement.field.name), args=c_ast.ExprList(exprs=para_list))
                     #return c_ast.FuncCall(name=c_ast.ID(name=struct_name+"_"+statement.field.name), args=c_ast.ParamList(params=ExprList(exprs=para_list)))
+        elif type(statement.name) is c_ast.ArrayRef and type(statement.field) is c_ast.ID:
+            s_array_name=getArrayName(statement.name)
+            if s_array_name in variable_map.keys():
+                variable=variable_map[s_array_name]
+                struct_name=variable.getStructType()
+                if struct_name is not None:
+                    para_list=[]
+                    para_list.append(statement.name)
+                    return c_ast.FuncCall(name=c_ast.ID(name=struct_name+"_"+statement.field.name), args=c_ast.ExprList(exprs=para_list))
         else:
             return statement
     elif type(statement) is c_ast.Cast:
@@ -13843,7 +15940,7 @@ def getSinks(programgraph_map):
     return sink_list
 
 
-def function_substitution_test(methodname,programgraph_map,f_map,o_map,a_map,cycle_list):
+def function_substitution_test(methodname,programgraph_map,f_map,o_map,a_map,assert_map,assume_map,cycle_list):
     list_of_dests=programgraph_map[methodname]
     if len(list_of_dests)>0:
         for dests in list_of_dests:
@@ -13851,13 +15948,16 @@ def function_substitution_test(methodname,programgraph_map,f_map,o_map,a_map,cyc
                 #print '$$$$$$$$$$$$$$$$$@@@@@@@@@@@@@@'
                 #print dests
                 #print '$$$$$$$$$$$$$$$$$@@@@@@@@@@@@@@'
-                function_substitution_test(dests,programgraph_map,f_map,o_map,a_map,cycle_list)
-        f,o,a=function_substitution_main(f_map[methodname],o_map[methodname],a_map[methodname],f_map,o_map,a_map,cycle_list)
+                function_substitution_test(dests,programgraph_map,f_map,o_map,a_map,assert_map,assume_map,cycle_list)
+        f,o,a,assert_list,assume_list=function_substitution_main(f_map[methodname],o_map[methodname],a_map[methodname],assert_map[methodname],assume_map[methodname],f_map,o_map,a_map,assert_map,assume_map,cycle_list)
         f_map[methodname]=f
         o_map[methodname]=o
         a_map[methodname]=a
+        assert_map[methodname]=assert_list
+        assume_map[methodname]=assume_list
         #print '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@'
-        output_axioms_fn(f,o,a)
+        #print assert_map
+        #print '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@'
         del programgraph_map[methodname]
 
         
@@ -13871,13 +15971,13 @@ external_var_map={}
 
 fun_substitution_map={}
 
-def function_substitution_main(f,o,a,f_map,o_map,a_map,cycle_list):
+def function_substitution_main(f,o,a,assert_list,assume_list,f_map,o_map,a_map,assert_map,assume_map,cycle_list):
     new_a=[]
     new_o={}
     for x in o:
         if o[x][0]=='e':
             new_stmts=[]
-            ret_term=function_substitution(o[x][2],f_map,o_map,a_map,new_stmts,cycle_list)
+            ret_term=function_substitution(o[x][2],assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
             if len(new_stmts)>0:
                 for y in new_stmts:
                     new_a.append(y)
@@ -13887,15 +15987,18 @@ def function_substitution_main(f,o,a,f_map,o_map,a_map,cycle_list):
     for x in a:
         new_stmts=[]
         if x[0]=='i1':
-            ret_term=function_substitution(x[4],f_map,o_map,a_map,new_stmts,cycle_list)
-            if len(new_stmts)>0:
-                for y in new_stmts:
-                    new_a.append(y)
-            if ret_term is not None:
-                x[4]=function_substitution(x[4],f_map,o_map,a_map,new_stmts,cycle_list)
-                new_a.append(x)
+            ret_term=function_substitution(x[4],assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
+            if 'DUMMY' in x[3][0]:
+                function_substitution_dummy_assert(x[4],assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
+            else:
+                if len(new_stmts)>0:
+                    for y in new_stmts:
+                        new_a.append(y)
+                if ret_term is not None:
+                    x[4]=function_substitution(x[4],assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
+                    new_a.append(x)
         elif x[0]=='i0':
-            ret_term=function_substitution(x[3],f_map,o_map,a_map,new_stmts,cycle_list)
+            ret_term=function_substitution(x[3],assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
             if len(new_stmts)>0:
                 for y in new_stmts:
                     new_a.append(y)
@@ -13903,7 +16006,7 @@ def function_substitution_main(f,o,a,f_map,o_map,a_map,cycle_list):
                 x[3]=ret_term
                 new_a.append(x)
         elif x[0]=='s0' or x[0]=='s1' :
-            ret_term=function_substitution(x[1],f_map,o_map,a_map,new_stmts,cycle_list)
+            ret_term=function_substitution(x[1],assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
             if len(new_stmts)>0:
                 for y in new_stmts:
                     new_a.append(y)
@@ -13912,7 +16015,7 @@ def function_substitution_main(f,o,a,f_map,o_map,a_map,cycle_list):
                 new_a.append(x)
         else:
             new_a.append(x)
-    return f,new_o,new_a
+    return f,new_o,new_a,assert_list,assume_list
 
 
 
@@ -13931,7 +16034,7 @@ def function_substitution_main_Assert(assert_list,f_map,o_map,a_map,cycle_list):
     return new_assert_list
 
 
-def function_substitution(e,f_map,o_map,a_map,new_stmts,cycle_list):
+def function_substitution(e,assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list):
     global fun_substitution_map
     global LC
     args=expr_args(e)
@@ -13940,6 +16043,10 @@ def function_substitution(e,f_map,o_map,a_map,new_stmts,cycle_list):
     if len(args)==0:
         #if op in f_map.keys():
         if fun_name in f_map.keys() and fun_name not in cycle_list:
+            for x in  assert_map[fun_name]:
+                assert_list.append(x)
+            for x in  assume_map[fun_name]:
+                assume_list.append(x)
             if 'RET' in o_map[fun_name].keys():
                 ret_stmt = o_map[fun_name]['RET']
                 if len(a_map[fun_name])>0 and op not in fun_substitution_map.keys():
@@ -13959,7 +16066,7 @@ def function_substitution(e,f_map,o_map,a_map,new_stmts,cycle_list):
          if e[:1]==['and'] or e[:1]==['or'] or e[:1]==['not'] or e[:1]==['ite'] or op in _infix_op or isArrayFunction(op)==True:
             temp=[]
             for x in expr_args(e):
-                parameter=function_substitution(x,f_map,o_map,a_map,new_stmts,cycle_list)
+                parameter=function_substitution(x,assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
                 if parameter is None:
                     temp.append(x)
                 else:
@@ -13967,6 +16074,12 @@ def function_substitution(e,f_map,o_map,a_map,new_stmts,cycle_list):
             return e[:1]+temp
          #elif op in f_map.keys():
          elif fun_name in f_map.keys() and fun_name not in cycle_list:
+            temp_assert_list=[]
+            temp_assume_list=[]
+            for x in  assert_map[fun_name]:
+                temp_assert_list.append(x)
+            for x in  assume_map[fun_name]:
+                temp_assume_list.append(x) 
             temp=[]
             temp2=[]
             sub_map={}
@@ -13978,10 +16091,10 @@ def function_substitution(e,f_map,o_map,a_map,new_stmts,cycle_list):
                 #print '----------######----------'
                 ret_stmt = o_map[fun_name]['RET']
                 for x in expr_args(e):
-                    parameter=function_substitution(x,f_map,o_map,a_map,new_stmts,cycle_list)
+                    parameter=function_substitution(x,assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
                     temp.append(parameter)
                 for x in expr_args(ret_stmt[1]):
-                    parameter=function_substitution(x,f_map,o_map,a_map,new_stmts,cycle_list)
+                    parameter=function_substitution(x,assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
                     temp2.append(parameter)
                 if len(a_map[fun_name])>0 and op not in fun_substitution_map.keys():
                     new_a=copy.deepcopy(a_map[fun_name])
@@ -13995,12 +16108,20 @@ def function_substitution(e,f_map,o_map,a_map,new_stmts,cycle_list):
                 new_stmt=copy.deepcopy(ret_stmt[2])
                 for x in range(0,len(temp2)):
                     new_stmt=expr_replace(new_stmt,temp2[x],temp[x])
+                    for y in  temp_assert_list:
+                        y[-1]=expr_replace(y[-1],temp2[x],temp[x])
+                    for y in  temp_assume_list:
+                        y[-1]=expr_replace(y[-1],temp2[x],temp[x])
                 new_stmt = replace_fun_substitute(new_stmt,op,fun_count,temp)
+                for x in  temp_assert_list:
+                    assert_list.append(x)
+                for x in  temp_assume_list:
+                    assume_list.append(x)
                 return new_stmt
             else:
                 
                 for x in expr_args(e):
-                    parameter=function_substitution(x,f_map,o_map,a_map,new_stmts,cycle_list)
+                    parameter=function_substitution(x,assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list)
                     temp.append(parameter)
                 #for x in expr_args(ret_stmt[1]):
                 #    parameter=function_substitution(x,f_map,o_map,a_map,new_stmts)
@@ -14012,13 +16133,102 @@ def function_substitution(e,f_map,o_map,a_map,new_stmts,cycle_list):
                         fun_substitution_map[op]=op
                     for x in range(0,len(temp2)):
                         new_a=construct_a(temp2[x],temp[x],new_a,temp,op)
+                        for y in  temp_assert_list:
+                            y[-1]=expr_replace(y[-1],temp2[x],temp[x])
+                        for y in  temp_assume_list:
+                            y[-1]=expr_replace(y[-1],temp2[x],temp[x])
                     for x in new_a:
                         new_stmts.append(x)
+                    for x in  temp_assert_list:
+                        assert_list.append(x)
+                    for x in  temp_assume_list:
+                        assume_list.append(x)
                 return None
                 
          else:
-            return e[:1]+list(function_substitution(x,f_map,o_map,a_map,new_stmts,cycle_list) for x in expr_args(e))
+            return e[:1]+list(function_substitution(x,assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list) for x in expr_args(e))
 
+
+
+
+def function_substitution_dummy_assert(e,assert_list,assume_list,f_map,o_map,a_map,new_stmts,assert_map,assume_map,cycle_list):
+    global fun_substitution_map
+    global LC
+    args=expr_args(e)
+    op=expr_op(e)
+    fun_name=fun_matching(op)
+    if op is 'ite':
+            if args[1][0] in f_map.keys() and args[1][0] not in cycle_list:
+                temp=[]
+                temp2=[]
+                parameters=expr_args(args[1])
+                for parameter in parameters:
+                    temp.append(parameter)
+                for parameter in f_map[args[1][0]]:
+                    temp2.append(eval("['"+parameter+"']"))
+                temp_assert_list=[]
+                temp_assume_list=[]
+                for x in  assert_map[args[1][0]]:
+                    temp_assert_list.append(x)
+                for x in  assume_map[args[1][0]]:
+                    temp_assume_list.append(x)
+                    
+                for x in range(0,len(temp2)):
+                    for y in  temp_assert_list:
+                        y[-1]=expr_replace(y[-1],temp2[x],temp[x])
+                    for y in  temp_assume_list:
+                        y[-1]=expr_replace(y[-1],temp2[x],temp[x])
+                        
+                for x in temp_assert_list:
+                    assert_temp=[]
+                    assert_temp.append('implies')
+                    assert_temp.append(args[0])
+                    assert_temp.append(x[-1])
+                    x[-1]=assert_temp
+                    assert_list.append(x)
+                for x in temp_assume_list:
+                    assume_temp=[]
+                    assume_temp.append('implies')
+                    assume_temp.append(args[0])
+                    assume_temp.append(x[-1])
+                    x[-1]=assert_temp
+                    assert_list.append(x)
+                    
+            elif args[2][0] in f_map.keys() and args[2][0] not in cycle_list:
+                temp=[]
+                temp2=[]
+                parameters=expr_args(args[2])
+                for parameter in parameters:
+                    temp.append(parameter)
+                for parameter in f_map[args[2][0]]:
+                    temp2.append(eval("['"+parameter+"']"))
+                temp_assert_list=[]
+                temp_assume_list=[]
+                for x in  assert_map[args[2][0]]:
+                    temp_assert_list.append(x)
+                for x in  assume_map[args[2][0]]:
+                    temp_assume_list.append(x)
+                    
+                for x in range(0,len(temp2)):
+                    for y in  temp_assert_list:
+                        y[-1]=expr_replace(y[-1],temp2[x],temp[x])
+                    for y in  temp_assume_list:
+                        y[-1]=expr_replace(y[-1],temp2[x],temp[x])
+                        
+                for x in temp_assert_list:
+                    assert_temp=[]
+                    assert_temp.append('Implies')
+                    assert_temp.append(expr_complement(args[0]))
+                    assert_temp.append(x[-1])
+                    x[-1]=assert_temp
+                    assert_list.append(x)
+                for x in temp_assume_list:
+                    assume_temp=[]
+                    assume_temp.append('Implies')
+                    assume_temp.append(expr_complement(args[0]))
+                    assume_temp.append(x[-1])
+                    x[-1]=assert_temp
+                    assert_list.append(x)
 
 #fun_name='avg_1'
 
@@ -14330,7 +16540,7 @@ def AssetionAnalysis(program_analysis,program_analysis_decl):
  
     #""
     program_analysis = program_analysis.replace('_Bool','int')
-    program_analysis="#include <time.h>\n#include <stdlib.h>\n#include <stdio.h>\nchar _count_char='\\0';\nunsigned int _count=0;\nint _count_int=0;\ndouble _count_double=0.0;\nfloat _count_float=0.0f;\nint __VERIFIER_nondet_bool()\n{\n_count++;\nsrand(_count+(unsigned int)time(NULL));\nsrand(rand());\nreturn rand()%2;\n}\nchar __VERIFIER_nondet_char()\n{\n_count_char++;\nsrand(_count_int+(char)time(NULL));\nsrand(rand());\nreturn rand()%1000;\n}\nint __VERIFIER_nondet_int()\n{\n _count_int++;\nsrand(_count_int+(int)time(NULL));\n srand(rand());\n return rand()%1000;\n}\n"+"\nunsigned int __VERIFIER_nondet_uint()\n{\n _count++;\nsrand(_count+(unsigned int)time(NULL));\n srand(rand());\n return rand()%1000;\n}\n"+"\ndouble __VERIFIER_nondet_double()\n{\n _count++;\nsrand(_count_double+(double)time(NULL));\n srand(rand());\n return rand()%1000;\n}\n"+"\nfloat __VERIFIER_nondet_float()\n{\n _count++;\nsrand(_count_float+(float)time(NULL));\n srand(rand());\n return rand()%1000;\n}\n"+program_analysis_decl+program_analysis
+    program_analysis="#include <time.h>\n#include <stdlib.h>\n#include <stdio.h>\nchar _count_char='\\0';\nunsigned int _count=0;\nint _count_int=0;\ndouble _count_double=0.0;\nfloat _count_float=0.0f;\nint __VERIFIER_nondet_bool()\n{\nint value;\n_count++;\nsrand(_count+(unsigned int)time(NULL));\nsrand(rand());\nvalue=rand()%2;\nprintf(\"__VERIFIER_nondet_bool:%d\\n\", value);\nreturn value;\n}\nchar __VERIFIER_nondet_char()\n{\nchar value;\n_count_char++;\nsrand(_count_int+(char)time(NULL));\nsrand(rand());\nvalue=rand()%1000;\nprintf(\"__VERIFIER_nondet_char:%c\\n\", value);\nreturn value;\n}\nint __VERIFIER_nondet_int()\n{\nint value;\n _count_int++;\nsrand(_count_int+(int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nprintf(\"__VERIFIER_nondet_int:%d\\n\", value);\nreturn value;\n}\n"+"\nunsigned int __VERIFIER_nondet_uint()\n{\nunsigned int value;\n _count++;\nsrand(_count+(unsigned int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nprintf(\"__VERIFIER_nondet_uint:%u\\n\", value);\nreturn value;\n}\n"+"\ndouble __VERIFIER_nondet_double()\n{\ndouble value;\n _count++;\nsrand(_count_double+(double)time(NULL));\n srand(rand());\n value=rand()%1000;\nprintf(\"__VERIFIER_nondet_double:%lf\\n\", value);\nreturn value;\n}\n"+"\nfloat __VERIFIER_nondet_float()\n{\nfloat value;\n _count++;\nsrand(_count_float+(float)time(NULL));\n srand(rand());\n \n value=rand()%1000;\nprintf(\"__VERIFIER_nondet_float:%f\\n\", value);\nreturn value;\n}\n"+program_analysis_decl+program_analysis
     writtingFile( "input_program.c" , program_analysis )
     try :
         #proc = subprocess.Popen('gcc -o input_program input_program.c', stdout=subprocess.PIPE,shell=True)
@@ -14342,7 +16552,7 @@ def AssetionAnalysis(program_analysis,program_analysis_decl):
             #output, err = proc.communicate()
             #print '##################---------------'
             command = commandclass.Command(currentdirectory+"/input_program")
-            output = command.run(timeout=120)
+            output = command.run(timeout=60)
             status=output
             if status is not None and 'Termination Failed' not in status:
                 outputs_list = status.split('--------\n')
@@ -14352,6 +16562,7 @@ def AssetionAnalysis(program_analysis,program_analysis_decl):
                     if len(result.keys())>0:
                         for key in result.keys():
                             map_asserts[key]=result[key]
+                            return map_asserts
             elif status is not None and 'Termination Failed' in status:
                 return None
         return map_asserts        
@@ -14361,18 +16572,44 @@ def AssetionAnalysis(program_analysis,program_analysis_decl):
 
 def processOutput(outputs_list):
     map_asserts={}
+    value_others=None
     for output_list in outputs_list:
         if len(output_list)>1:
             elements = output_list.split('\n')
-            if '_PROVE' in elements[0] and ':' in elements[0]:
-                element = elements[0].split(':')
-                if int(element[1])==0:
-                    map_asserts[elements[0]]=elements[1:]
-            elif '_FAILED' in elements[0] and ':' in elements[0]:
-                element = elements[0].split(':')
-                if int(element[1])==1:
-                    map_asserts[elements[0]]=elements[1:]
+            temp_value_others,eval_value = getOtherValues(elements)
+            #print '%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+            #print temp_value_others
+            #print '--------------------------'
+            #print eval_value
+            #print '%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+            if temp_value_others is not None:
+                value_others=temp_value_others
+            if eval_value is not None and value_others is not None:
+                if '_PROVE' in eval_value and ':' in eval_value:
+                    element = eval_value.split(':')
+                    if int(element[1])==0:
+                        map_asserts[eval_value]=value_others
+                elif '_FAILED' in eval_value and ':' in eval_value:
+                    element = eval_value.split(':')
+                    if int(element[1])==1:
+                        map_asserts[eval_value]=value_others
     return map_asserts
+
+def getOtherValues(elements):
+    otherelements=None
+    eval_value=None
+    for element in elements:
+        if '_FAILED' not in element and '_PROVE' not in element and element.strip() !='':
+            if otherelements is None:
+                otherelements=[]
+                otherelements.append(element)
+            else:
+                otherelements.append(element)
+        elif '_FAILED' in element:
+            eval_value=element 
+        elif '_PROVE' in element:
+            eval_value=element
+    return otherelements,eval_value
 
     
 def processOutputAssume(outputs_list):
@@ -14715,6 +16952,10 @@ def translate(file_name):
                         statements = translateStruct(statements,localvarmap,struct_map)
                         #statements=pointerHandling(statements,pointer_list,array_list)
                         body_comp = c_ast.Compound(block_items=statements)
+                        
+                        print '^^^^^^^^^^^^^^^^'
+                        body_comp.show()
+                        print '^^^^^^^^^^^^^^^^'
                         membermethod.setBody(body_comp)
                         membermethod.setLocalvar(localvarmap)
                         membermethod.setAnalysis_module(c_ast.Compound(block_items=pa_statements))
@@ -15236,6 +17477,7 @@ def translate2IM(file_name):
                             statements = updatePointerStruct(statements,struct_map)
                         
                             pa_statements = updatePointerStruct(pa_statements,struct_map)
+                            pa_statements = organizeInnerDeclartionMain(pa_statements)
                         
                         except Exception as e:
                             print 'Error(Translation to Intermate Intermediate)'
@@ -16487,13 +18729,13 @@ def translate2IntForm(function_name,function_type,function_body,parametermap,tem
     localvarmap=getVariables(function_body)
     
     
-    print 'Program Body'
+    #print 'Program Body'
     
     generator = c_generator.CGenerator()
     
     
     #print(generator.visit(tempory))
-    print(generator.visit(function_body))
+    #print(generator.visit(function_body))
     
     membermethod=membermethodclass(function_name,function_type,parametermap,localvarmap,function_body,0,0,tempory,function_body_pa,None)
     
@@ -16503,35 +18745,39 @@ def translate2IntForm(function_name,function_type,function_body,parametermap,tem
     #print '!!!!!!!!!!!!!!!!!!'
     #print(generator.visit(membermethod.getAnalysis_module()))
     #print '!!!!!!!!!!!!!!!!!!'
+
     
-    print "Function Name:"
-    print membermethod.getMethodname()
-    print "Return Type:"
-    print membermethod.getreturnType()
-    print "Input Variables:"
+    #print "Function Name:"
+    #print membermethod.getMethodname()
+    #print "Return Type:"
+    #print membermethod.getreturnType()
+    #print "Input Variables:"
     var_list="{"
     for x in membermethod.getInputvar():
-        if membermethod.getInputvar()[x].getDimensions()>0:
+
+        if membermethod.getInputvar()[x].getDimensions() is not None and len(membermethod.getInputvar()[x].getDimensions())>0:
             if membermethod.getInputvar()[x].getStructType() is None:
                 var_list+=' '+x+':array'
             else:
-                var_list+=' '+x+':'+membermethod.getInputvar()[x].getStructType()
+                var_list+=' '+x+':array'
+                #var_list+=' '+x+':'+membermethod.getInputvar()[x].getStructType()
 	else:
 	    var_list+=' '+x+':'+membermethod.getInputvar()[x].getVariableType()
     var_list+='}'
-    print var_list
-    print "Local Variables:"
+    #print var_list
+    #print "Local Variables:"
     var_list="{"
     for x in membermethod.getLocalvar():
-        if membermethod.getLocalvar()[x].getDimensions()>0:
+        if membermethod.getLocalvar()[x].getDimensions() is not None and len(membermethod.getLocalvar()[x].getDimensions())>0:
             if membermethod.getLocalvar()[x].getStructType() is None:
                 var_list+=' '+x+':array'
             else:
-                var_list+=' '+x+':'+membermethod.getLocalvar()[x].getStructType()
+                var_list+=' '+x+':array'
+                #var_list+=' '+x+':'+membermethod.getLocalvar()[x].getStructType()
 	else:
             var_list+=' '+x+':'+membermethod.getLocalvar()[x].getVariableType()
     var_list+='}'
-    print var_list
+    #print var_list
     allvariable={}
     program_dec_start=""
     program_dec_end=""
@@ -16590,27 +18836,29 @@ def translate2IntForm(function_name,function_type,function_body,parametermap,tem
     
     for variable in allvariable:
         count+=1
-        if allvariable[variable].getDimensions()>0:
+        if allvariable[variable].getDimensions() is not None and len(allvariable[variable].getDimensions())>0:
             if allvariable[variable].getStructType() is None:
                 variablesarray[variable]=eval("['_y"+str(count)+"','array']")
                 opvariablesarray[variable+"1"]=eval("['_y"+str(count)+"','array']")
                 list_parameter="'array'"
-                for i in range(0, allvariable[variable].getDimensions()):
+                for i in range(0, len(allvariable[variable].getDimensions())):
                     if list_parameter=='':
                         list_parameter="'int'"
                     else:
                         list_parameter+=",'int'"
                 list_parameter+=",'"+allvariable[variable].getVariableType()+"'"
                 #key1=str(allvariable[variable].getDimensions())+'array'
-                key1='d'+str(allvariable[variable].getDimensions())+'array'
+                key1='d'+str(len(allvariable[variable].getDimensions()))+'array'
                 arrayFlag=True
                 if key1 not in variablesarray.keys():
                     count+=1
                     variablesarray[key1]=eval("['_y"+str(count)+"',"+list_parameter+"]")
                     opvariablesarray[key1+"1"]=eval("['_y"+str(count)+"',"+list_parameter+"]")
             else:
-                variablesarray[variable]=eval("['_y"+str(count)+"','"+allvariable[variable].getStructType()+"']")
-                opvariablesarray[variable+"1"]=eval("['_y"+str(count)+"','"+allvariable[variable].getStructType()+"']")
+                variablesarray[variable]=eval("['_y"+str(count)+"','array']")
+                opvariablesarray[variable+"1"]=eval("['_y"+str(count)+"','array']")
+                #variablesarray[variable]=eval("['_y"+str(count)+"','"+allvariable[variable].getStructType()+"']")
+                #opvariablesarray[variable+"1"]=eval("['_y"+str(count)+"','"+allvariable[variable].getStructType()+"']")
                 if allvariable[variable].getStructType() in struct_map.keys():
                     var_mem_list=struct_map[allvariable[variable].getStructType()]
                     print var_mem_list.getName()
@@ -16994,10 +19242,12 @@ def getAllNodesOfAssetion(statement,map_nodes):
             map_nodes.append(statement.left)
         if type(statement.right) is c_ast.BinaryOp:
             getAllNodesOfAssetion(statement.right,map_nodes)
-        elif type(statement.right) is c_ast.ID:
+        elif type(statement.right) is c_ast.ID and ('_PROVE' in statement.right.name or '_FAILED' in statement.right.name or '_ASSUME' in statement.right.name):
             map_nodes.append(statement.right)
         elif type(statement.right) is c_ast.ArrayRef:
-            map_nodes.append(statement.right)
+            array_name=getArrayRef_Name(statement.right)
+            if ('_PROVE' in array_name or '_FAILED' in array_name or '_ASSUME' in array_name):
+                map_nodes.append(statement.right)
     
 
 
@@ -17009,17 +19259,18 @@ def addPrintStmt(statements,localvariables,inputvariables):
                 update_statements.append(statement)
                 nodes=[]
                 list_variables=[]
-                getAllNodesOfAssetion(statement.rvalue,nodes)
+                #getAllNodesOfAssetion(statement.rvalue,nodes)
                 update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                for node in nodes:
-                        if type(node) is c_ast.ID:
-                            list_variables.append(node.name)
-                        update_statements.append(createPrint(node,localvariables,inputvariables))
-                for var in localvariables.keys():
-                    varObject=localvariables[var]
-                    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
-                        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
-                            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
+                #for node in nodes:
+                #        node.show()
+                #        if type(node) is c_ast.ID:
+                #            list_variables.append(node.name)
+                #        update_statements.append(createPrint(node,localvariables,inputvariables))
+                #for var in localvariables.keys():
+                #    varObject=localvariables[var]
+                #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
+                #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
+                #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
                 arg_list=[]
                 arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
                 update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
@@ -17028,17 +19279,17 @@ def addPrintStmt(statements,localvariables,inputvariables):
                 update_statements.append(statement)
                 nodes=[]
                 list_variables=[]
-                getAllNodesOfAssetion(statement.rvalue,nodes)
+                #getAllNodesOfAssetion(statement.rvalue,nodes)
                 update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                for node in nodes:
-                        if type(node) is c_ast.ID:
-                            list_variables.append(node.name)
-                        update_statements.append(createPrint(node,localvariables,inputvariables))
-                for var in localvariables.keys():
-                    varObject=localvariables[var]
-                    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
-                        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
-                            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
+                #for node in nodes:
+                #        if type(node) is c_ast.ID:
+                #            list_variables.append(node.name)
+                #        update_statements.append(createPrint(node,localvariables,inputvariables))
+                #for var in localvariables.keys():
+                #    varObject=localvariables[var]
+                #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
+                #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
+                #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
                 arg_list=[]
                 arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
                 update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))            
@@ -17061,17 +19312,17 @@ def addPrintStmt(statements,localvariables,inputvariables):
                     update_statements.append(statement)
                     nodes=[]
                     list_variables=[]
-                    getAllNodesOfAssetion(statement.rvalue,nodes)
+                    #getAllNodesOfAssetion(statement.rvalue,nodes)
                     update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                    for node in nodes:
-                        if type(node) is c_ast.ID:
-                            list_variables.append(node.name)
-                        update_statements.append(createPrint(node,localvariables,inputvariables))
-                    for var in localvariables.keys():
-                        varObject=localvariables[var]
-                        if varObject.getDimensions()==0 or varObject.getDimensions() is None:
-                            if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
-                                update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
+                    #for node in nodes:
+                    #    if type(node) is c_ast.ID:
+                    #        list_variables.append(node.name)
+                    #    update_statements.append(createPrint(node,localvariables,inputvariables))
+                    #for var in localvariables.keys():
+                    #    varObject=localvariables[var]
+                    #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
+                    #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
+                    #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
                     arg_list=[]
                     arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
                     update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
@@ -17080,17 +19331,17 @@ def addPrintStmt(statements,localvariables,inputvariables):
                     update_statements.append(statement)
                     nodes=[]
                     list_variables=[]
-                    getAllNodesOfAssetion(statement.rvalue,nodes)
+                    #getAllNodesOfAssetion(statement.rvalue,nodes)
                     update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                    for node in nodes:
-                            if type(node) is c_ast.ID:
-                                list_variables.append(node.name)
-                            update_statements.append(createPrint(node,localvariables,inputvariables))
-                    for var in localvariables.keys():
-                        varObject=localvariables[var]
-                        if varObject.getDimensions()==0 or varObject.getDimensions() is None:
-                            if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
-                                update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
+                    #for node in nodes:
+                    #        if type(node) is c_ast.ID:
+                    #            list_variables.append(node.name)
+                    #        update_statements.append(createPrint(node,localvariables,inputvariables))
+                    #for var in localvariables.keys():
+                    #    varObject=localvariables[var]
+                    #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
+                    #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
+                    #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
                     arg_list=[]
                     arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
                     update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list))) 
@@ -17113,6 +19364,7 @@ def addPrintStmt(statements,localvariables,inputvariables):
             update_statements.append(addPrintStmtIf(statement,localvariables,inputvariables))
         else:
             update_statements.append(statement)
+    
     return update_statements
 
 
@@ -17190,13 +19442,22 @@ def programPrint(statement):
     return str(generator.visit(statement))
  
     
-def getArrayDetails(statement,degree):
+def getArrayDetails(statement,degree,dimension_map):
 	if type(statement.type) is c_ast.ArrayDecl:
 		degree=degree+1
-		return getArrayDetails(statement.type,degree)
+                if type(statement.type.dim) is c_ast.ID:
+                    if is_number(statement.type.dim.name)==True:
+                        dimension_map['_x'+str(degree+1)]=statement.type.dim.name+'_var1'
+                    elif statement.type.dim.name in ['S','Q','N','in','is']:
+                        dimension_map['_x'+str(degree+1)]=statement.type.dim.name+'_var1'
+                    else:
+                        dimension_map['_x'+str(degree+1)]=statement.type.dim.name+'1'
+                elif type(statement.type.dim) is c_ast.Constant:
+                    dimension_map['_x'+str(degree+1)]=statement.type.dim.value
+		return getArrayDetails(statement.type,degree,dimension_map)
 	elif type(statement.type) is c_ast.PtrDecl:
 		degree=degree+1
-		return getArrayDetails(statement.type,degree)
+		return getArrayDetails(statement.type,degree,dimension_map)
 	else:
 		if type(statement.type.type) is c_ast.Struct:
 			return statement.type.type.name,degree,statement.type.type.name
@@ -17258,12 +19519,14 @@ def getVariablesC(statements):
 
             if type(decl.type) is c_ast.ArrayDecl:
             	degree=0
-	    	var_type,degree,structType=getArrayDetails(decl,degree)
-		variable=variableclass(decl.name, var_type,None,degree,initial_value,structType)
+                dimensionmap={}
+	    	var_type,degree,structType=getArrayDetails(decl,degree,dimensionmap)
+		variable=variableclass(decl.name, var_type,None,dimensionmap,initial_value,structType)
 	    elif type(decl.type) is c_ast.PtrDecl:
                 degree=0
-	    	var_type,degree,structType=getArrayDetails(decl,degree)
-		variable=variableclass(decl.name, var_type,'Pointer',degree,initial_value,structType)
+                dimensionmap={}
+	    	var_type,degree,structType=getArrayDetails(decl,degree,dimensionmap)
+		variable=variableclass(decl.name, var_type,'Pointer',dimensionmap,initial_value,structType)
 	    else:
             	for child in decl.children():
             		if type(child[1]) is c_ast.TypeDecl:
@@ -17272,6 +19535,7 @@ def getVariablesC(statements):
 				else:
 					if type(child[1].type) is c_ast.Struct:
 						structType=child[1].type.name
+                                                var_type=child[1].type.name
 					else:
                     				initial_value=child[1].value
                     	else:
@@ -17584,6 +19848,15 @@ def programToinductiveDefination_C(expressions, allvariable):
 									parameter =expressionCreator_C(param)
 								else:
 					        			parameter += ","+expressionCreator_C(param)
+                                                        else:
+                                                            if type(param) is c_ast.ArrayRef:
+                                                            #parameter_list.append('int')
+                                                                degree=0
+                                                                stmt,degree=createArrayList_C(param,degree)
+                                                                if parameter=='':
+                                                                    parameter = str(eval("expres('d"+str(degree)+'array'+"',["+stmt+"])"))
+                                                                else:
+                                                                    parameter += ","+str(eval("expres('d"+str(degree)+'array'+"',["+stmt+"])"))
 					var="['"+statement.name.name+"',"+parameter+"]"
 		
                                 
@@ -17619,6 +19892,15 @@ def programToinductiveDefination_C(expressions, allvariable):
 								parameter =expressionCreator_C(param)
 							else:
 					        		parameter += ","+expressionCreator_C(param)
+                                                else:
+                                                    if type(param) is c_ast.ArrayRef:
+                                                        #parameter_list.append('int')
+                                                        degree=0
+                                                        stmt,degree=createArrayList_C(param,degree)
+                                                        if parameter=='':
+                                                            parameter = str(eval("expres('d"+str(degree)+'array'+"',["+stmt+"])"))
+                                                        else:
+                                                            parameter += ","+str(eval("expres('d"+str(degree)+'array'+"',["+stmt+"])"))
 					
                                         if expression.getIsPrime()==False:
 						if programsstart=="":
@@ -17912,6 +20194,7 @@ def expressionCreator_C(statement):
             elif statement.to_type.type.type.names[0]=='int':
                 return "['"+"_ToInt"+"',"+expressionCreator_C(statement.expr)+"]"
         else:
+            
             if statement.op in ['+','-','*','/','%']:
                 expression="expres('"
                 expression+=statement.op
@@ -18478,7 +20761,9 @@ def isVarPresntStmt(statement,variable_name):
             if variable_name==statement.name:
                 return True
             else:
-                return False 
+                return False
+        elif type(statement) is c_ast.StructRef:
+            return isVarPresntStmt(statement.name,variable_name)
         elif type(statement) is c_ast.ArrayRef:
             if variable_name == getArrayName(statement):
                 return True
@@ -20822,8 +23107,7 @@ def substituteFunBlock(statements,functionvarmap,functionname,externalvarmap):
 				new_blocks=reconstructStmtBlock(membermethod.getBody().block_items,count,membermethod.getLocalvar(),membermethod.getInputvar(),membermethod.getSerialNo())
                             
 				new_blocks=substituteFunBlock(new_blocks,functionvarmap,functionname,externalvarmap)
-                                
-                                
+
 				for x in membermethod.getInputvar():
 					if x in all_var_int:
 						if membermethod.getInputvar()[x].getDimensions()>0:
@@ -20858,6 +23142,9 @@ def substituteFunBlock(statements,functionvarmap,functionname,externalvarmap):
 			if type(statement.lvalue) is c_ast.ID:
 				if 'DUMMY' not in statement.lvalue.name:
 					update_statements.append(c_ast.Assignment(op='=',lvalue=statement.lvalue,rvalue=new_statement))
+                                else:
+                                        if new_block is None:
+                                            update_statements.append(c_ast.Assignment(op='=',lvalue=statement.lvalue,rvalue=statement.rvalue))
 			else:
 				update_statements.append(c_ast.Assignment(op='=',lvalue=statement.lvalue,rvalue=new_statement))
 		elif type(statement) is c_ast.While:
@@ -20940,8 +23227,6 @@ def substituteFun(statement,functionvarmap,functionname,externalvarmap):
 		count=count+1
 		membermethod.setUsedCounter(count)
 		
-
-		
 		membermethod_cur=functionvarmap[functionname]
                 
 		if membermethod_cur is not None:
@@ -20985,8 +23270,15 @@ def substituteFun(statement,functionvarmap,functionname,externalvarmap):
 						#update_statements.append(c_ast.Assignment(op='=',lvalue=c_ast.ID(name='f'+str(membermethod.getSerialNo())+'_'+str(count)+'_'+in_var_map[x]),rvalue=arg[x]))
 						input_map[in_var_map[x]]=arg[x]
 
+				
+				
 				new_blocks=reconstructStmtBlock(membermethod.getBody().block_items,count,membermethod.getLocalvar(),input_map,membermethod.getSerialNo(),all_var_int)
+                                
+                                
+                                
 				new_blocks=substituteFunBlock(new_blocks,functionvarmap,functionname,externalvarmap)
+                                
+                                
 				for x in membermethod.getInputvar().keys():
 					if x in all_var_int:
 						if membermethod.getInputvar()[x].getDimensions()>0:
@@ -21015,7 +23307,7 @@ def substituteFun(statement,functionvarmap,functionname,externalvarmap):
 				for stmt in new_blocks:
 					update_statements.append(stmt)
  		
- 				return c_ast.ID(name='f'+str(membermethod.getSerialNo())+'_'+str(count)+'_'+'result'),update_statements	
+ 				return c_ast.ID(name='f'+str(membermethod.getSerialNo())+'_'+str(count)+'_'+'RET'),update_statements	
  			else:
  				return statement,new_block
  		else:
@@ -22007,7 +24299,22 @@ def reconstructStmtBlock(statements,count,var_map,in_var_map,fun_count,all_var_i
         global counter_variableMap_Conf
         global new_variable_array
 	for statement in statements:
-		if type(statement) is c_ast.Assignment:
+                if type(statement) is c_ast.Decl:
+                    if type(statement.type) is c_ast.ArrayDecl:
+                        if statement.name in all_var_int:
+                            update_statements.append(c_ast.Decl(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.name, quals=statement.quals, storage=statement.storage, funcspec=statement.funcspec, type=renameArrayName(statement.type), init=statement.init, bitsize=statement.bitsize))
+                        else:
+                            update_statements.append(statement)
+                    elif type(statement.type) is c_ast.PtrDecl:
+                        if type(statement.type.type) is c_ast.TypeDecl:
+                            update_statements.append(c_ast.TypeDecl('f'+str(fun_count)+'_'+str(count)+'_'+statement.name, quals=statement.type.type.quals, type=statement.type.type.type))
+                    else:
+                        if statement.name in all_var_int:
+                            update_statements.append(c_ast.Decl(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.name, quals=statement.quals, storage=statement.storage, funcspec=statement.funcspec, type=c_ast.TypeDecl(declname='f'+str(fun_count)+'_'+str(count)+'_'+statement.type.declname, quals=statement.type.quals, type=statement.type.type), init=statement.init, bitsize=statement.bitsize))
+                        else:
+                            update_statements.append(statement)
+
+		elif type(statement) is c_ast.Assignment:
 			if type(statement.lvalue) is c_ast.ID:
 				if statement.lvalue.name in all_var_int:
 					update_statements.append(c_ast.Assignment(op='=', lvalue=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.lvalue.name), rvalue=reconstructStmt(statement.rvalue,count,var_map,in_var_map,fun_count,all_var_int)))
@@ -22026,24 +24333,16 @@ def reconstructStmtBlock(statements,count,var_map,in_var_map,fun_count,all_var_i
 					else:
                                                 r_statement=reconstructStmt(statement.rvalue,count,var_map,in_var_map,fun_count,all_var_int)
                                                 l_statement=statement.lvalue
-                                                if '_PROVE' in statement.lvalue.name:
-                                                    #local_map={}
-                                                    #getIndexVariable(r_statement,local_map)
-                                                    #if local_map==counter_variableMap_Conf:
-                                                    #new_variable_array[l_statement.name]=creatArrayDec(l_statement.name,counter_variableMap_Conf.keys())
-                                                    new_variable_array[l_statement.name]=len(counter_variableMap_Conf.keys())
-                                                    l_statement=create_Assert_Array(l_statement,counter_variableMap_Conf.keys(),counter_variableMap_Conf)
+                                                #if '_PROVE' in statement.lvalue.name:
+                                                #    new_variable_array[l_statement.name]=len(counter_variableMap_Conf.keys())
+                                                #    l_statement=create_Assert_Array(l_statement,counter_variableMap_Conf.keys(),counter_variableMap_Conf)
 						update_statements.append(c_ast.Assignment(op='=', lvalue=l_statement, rvalue=r_statement))
 			else:
                                 r_statement=reconstructStmt(statement.rvalue,count,var_map,in_var_map,fun_count,all_var_int)
-                                l_statement=statement.lvalue
-                                if '_PROVE' in statement.lvalue.name:
-                                    #local_map={}
-                                    #getIndexVariable(r_statement,local_map)
-                                    #if local_map==counter_variableMap_Conf:
-                                    #new_variable_array[l_statement.name]=creatArrayDec(l_statement.name,counter_variableMap_Conf.keys())
-                                    new_variable_array[l_statement.name]=len(counter_variableMap_Conf.keys())
-                                    l_statement=create_Assert_Array(l_statement.name,counter_variableMap_Conf.keys(),counter_variableMap_Conf)
+                                l_statement=reconstructStmt(statement.lvalue,count,var_map,in_var_map,fun_count,all_var_int)
+                                #if '_PROVE' in statement.lvalue.name:
+                                #    new_variable_array[l_statement.name]=len(counter_variableMap_Conf.keys())
+                                #    l_statement=create_Assert_Array(l_statement.name,counter_variableMap_Conf.keys(),counter_variableMap_Conf)
 				update_statements.append(c_ast.Assignment(op='=', lvalue=l_statement, rvalue=r_statement))
 		elif type(statement) is c_ast.While:
 			update_statements.append(reconstructStmt(c_ast.While(cond=reconstructStmt(statement.cond,count,var_map,in_var_map,fun_count,all_var_int),stmt=c_ast.Compound(block_items=reconstructStmtBlock(statement.stmt.block_items,count,var_map,in_var_map,fun_count,all_var_int))),count,var_map,in_var_map,fun_count,all_var_int ))
@@ -22106,18 +24405,11 @@ def reconstructStmt(statement,count,var_map,in_var_map,fun_count,all_var_int):
 	if type(statement) is c_ast.ID:
 		if statement.name in var_map.keys() or statement.name in in_var_map.keys():
 			if statement.name in all_var_int:
-				new_ID='f'+str(fun_count)+'_'+str(count)+'_'+statement.name
+				return c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.name)
 			else:
-				if statement.name in in_var_map.keys():
-					new_ID=in_var_map[statement.name]
-				else:
-					new_ID=statement.name
-			if type(new_ID) is str:
-				return c_ast.ID(name=new_ID)
-			else:
-				return new_ID
+				return statement
 		else:
-			return c_ast.ID(name=statement.name)
+			return statement
  	elif type(statement) is c_ast.UnaryOp:
  		return c_ast.UnaryOp(op=statement.op,expr=reconstructStmt(statement.expr,count,var_map,in_var_map,fun_count,all_var_int))
  	elif type(statement) is c_ast.Constant:
@@ -22128,100 +24420,101 @@ def reconstructStmt(statement,count,var_map,in_var_map,fun_count,all_var_int):
  			stmt_right=None
  			if statement.left.name in var_map.keys() or statement.left.name in in_var_map.keys():
  				if statement.left.name in all_var_int:
- 					stmt_left='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name
+ 					stmt_left=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name)
  				else:
- 					if statement.left.name in in_var_map.keys():
- 						stmt_left=in_var_map[statement.left.name]
- 					else:
- 						stmt_left=statement.left.name
+ 					stmt_left=statement.left
+ 						
  			else:
- 				stmt_left=statement.left.name
+ 				stmt_left=statement.left
  				
  			if statement.right.name in var_map.keys() or statement.right.name in in_var_map.keys():
 				if statement.right.name in all_var_int:
-					stmt_right='f'+str(fun_count)+'_'+str(count)+'_'+statement.right.name
+					stmt_right=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.right.name)
 				else:
-					if statement.right.name in in_var_map.keys():
-						stmt_right=in_var_map[statement.right.name]
-					else:
-						stmt_right=statement.right.name
+					stmt_right=statement.right
+						
 			else:
- 				stmt_right=statement.right.name
+ 				stmt_right=statement.right
  			
- 			if type(stmt_left) is str and type(stmt_right) is str:
- 				return c_ast.BinaryOp(op=statement.op,left=c_ast.ID(name=stmt_left), right=c_ast.ID(name=stmt_right))
- 			elif type(stmt_left) is str:
- 				return c_ast.BinaryOp(op=statement.op,left=c_ast.ID(name=stmt_left), right=stmt_right)
- 			elif type(stmt_right) is str:
- 				return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=c_ast.ID(name=stmt_right))
+ 			return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=stmt_right)
+                        
+ 		elif type(statement.left) is c_ast.ID and type(statement.right) is c_ast.ArrayRef:
+ 			stmt_left=None
+ 			stmt_right=None
+ 			if statement.left.name in var_map.keys() or statement.left.name in in_var_map.keys():
+ 				if statement.left.name in all_var_int:
+ 					stmt_left=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name)
+ 				else:
+ 					stmt_left=statement.left
+ 						
  			else:
- 				return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=stmt_right)
+ 				stmt_left=statement.left
+ 				
+ 			stmt_right=renameArrayName1(statement.right,count,var_map,in_var_map,fun_count,all_var_int)
+ 			
+ 			return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=stmt_right)
+
+ 		elif type(statement.left) is c_ast.ArrayRef and type(statement.right) is c_ast.ID:
+ 			stmt_left=None
+ 			stmt_right=None
+                        
+ 			stmt_left=renameArrayName1(statement.left,count,var_map,in_var_map,fun_count,all_var_int)
+ 				
+ 			if statement.right.name in var_map.keys() or statement.right.name in in_var_map.keys():
+				if statement.right.name in all_var_int:
+					stmt_right=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.right.name)
+				else:
+					stmt_right=statement.right
+						
+			else:
+ 				stmt_right=statement.right
+ 			
+ 			return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=stmt_right)
+ 				
  		elif type(statement.left) is c_ast.ID and type(statement.right) is c_ast.BinaryOp:
  			stmt_left=None
- 			
 			if statement.left.name in all_var_int:
-				stmt_left='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name
+				stmt_left=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name)
 			else:
-				
-				if statement.left.name in in_var_map.keys():
- 					stmt_left=in_var_map[statement.left.name]
- 				else:
-					stmt_left=statement.left.name
+				stmt_left=statement.left
+					
+ 			return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
  				
- 			if type(stmt_left) is str:
- 				return c_ast.BinaryOp(op=statement.op,left=c_ast.ID(name=stmt_left), right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
- 			else:
- 				return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
  			
  		elif type(statement.left) is c_ast.BinaryOp and type(statement.right) is c_ast.ID:
  			stmt_right=None
  			
- 		
 			if statement.right.name in all_var_int:
-				stmt_right='f'+str(fun_count)+'_'+str(count)+statement.right.name
+				stmt_right=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+statement.right.name)
 			else:
-				if statement.right.name in in_var_map.keys():
-					stmt_right=in_var_map[statement.right.name]
-				else:
-					stmt_right=statement.right.name
- 			
- 			if type(stmt_right) is str:
- 				return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=c_ast.ID(name=stmt_right))
- 			else:
- 				return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=stmt_right)
+				stmt_right=statement.right
+					
+ 			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=stmt_right)
+ 				
   		elif type(statement.left) is c_ast.ID and type(statement.right) is c_ast.UnaryOp:
  			stmt_left=None
  			
 			if statement.left.name in all_var_int:
-				stmt_left='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name
+				stmt_left=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name)
 			else:
 				
-				if statement.left.name in in_var_map.keys():
- 					stmt_left=in_var_map[statement.left.name]
- 				else:
-					stmt_left=statement.left.name
+				stmt_left=statement.left
+					
+ 			return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
  				
- 			if type(stmt_left) is str:
- 				return c_ast.BinaryOp(op=statement.op,left=c_ast.ID(name=stmt_left), right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
- 			else:
- 				return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
  			
  		elif type(statement.left) is c_ast.UnaryOp and type(statement.right) is c_ast.ID:
  			stmt_right=None
  			
  		
 			if statement.right.name in all_var_int:
-				stmt_right='f'+str(fun_count)+'_'+str(count)+statement.right.name
+				stmt_right=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+statement.right.name)
 			else:
-				if statement.right.name in in_var_map.keys():
-					stmt_right=in_var_map[statement.right.name]
-				else:
-					stmt_right=statement.right.name
+				stmt_right=statement.right
+					
  			
- 			if type(stmt_right) is str:
- 				return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=c_ast.ID(name=stmt_right))
- 			else:
- 				return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=stmt_right)	
+ 			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=stmt_right)
+ 					
  		
 
  		
@@ -22233,36 +24526,50 @@ def reconstructStmt(statement,count,var_map,in_var_map,fun_count,all_var_int):
  			stmt_right=None
   
 			if statement.right.name in all_var_int:
-				stmt_right='f'+str(fun_count)+'_'+str(count)+'_'+statement.right.name
+				stmt_right=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.right.name)
 			else:
-				if statement.right.name in in_var_map.keys():
-					stmt_right=in_var_map[statement.right.name]			
-				else:
-					stmt_right=statement.right.name				
- 			if type(stmt_right) is str:
- 				return c_ast.BinaryOp(op=statement.op,left=statement.left, right=c_ast.ID(name=stmt_right))
- 			else:
- 				return c_ast.BinaryOp(op=statement.op,left=statement.left, right=stmt_right)
+				stmt_right=statement.right
+								
+ 			return c_ast.BinaryOp(op=statement.op,left=statement.left, right=stmt_right)
+ 				
  			
  		elif type(statement.left) is c_ast.ID and type(statement.right) is c_ast.Constant:
  			stmt_left=None
  			
  		 	if statement.left.name in all_var_int:
-				stmt_left='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name
+				stmt_left=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name)
 			else:
-				if statement.left.name in in_var_map.keys():
-					stmt_left=in_var_map[statement.left.name]
-				else:
-					stmt_left=statement.left.name
- 			if type(stmt_left) is str:
- 				return c_ast.BinaryOp(op=statement.op,left=c_ast.ID(name=stmt_left), right=statement.right)
- 			else:
- 				return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=statement.right)
+				stmt_left=statement.left
+					
+ 			return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=statement.right)
+ 			
+ 		elif type(statement.left) is c_ast.Constant and type(statement.right) is c_ast.ArrayRef:
+ 			stmt_right=None
+  
+			stmt_right=renameArrayName1(statement.right,count,var_map,in_var_map,fun_count,all_var_int)
+								
+ 			return c_ast.BinaryOp(op=statement.op,left=statement.left, right=stmt_right)
+ 				
+ 			
+ 		elif type(statement.left) is c_ast.ArrayRef and type(statement.right) is c_ast.Constant:
+ 			stmt_left=None
+ 			
+ 		 	stmt_left=renameArrayName1(statement.left,count,var_map,in_var_map,fun_count,all_var_int)
+					
+ 			return c_ast.BinaryOp(op=statement.op,left=stmt_left, right=statement.right)
+                    
+                        
  				
  		elif type(statement.left) is c_ast.Constant and type(statement.right) is c_ast.UnaryOp:
  			return c_ast.BinaryOp(op=statement.op,left=statement.left, right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
  		elif type(statement.left) is c_ast.UnaryOp and type(statement.right) is c_ast.Constant:
- 			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=statement.right)		
+ 			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=statement.right)	
+                        	
+                elif type(statement.left) is c_ast.Constant and type(statement.right) is c_ast.ArrayRef:
+ 			return c_ast.BinaryOp(op=statement.op,left=statement.left, right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
+ 		elif type(statement.left) is c_ast.ArrayRef and type(statement.right) is c_ast.Constant:
+ 			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=statement.right)
+  		
   		elif type(statement.left) is c_ast.Constant and type(statement.right) is c_ast.BinaryOp:
   			return c_ast.BinaryOp(op=statement.op,left=statement.left, right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
   		elif type(statement.left) is c_ast.BinaryOp and type(statement.right) is c_ast.Constant:
@@ -22275,6 +24582,17 @@ def reconstructStmt(statement,count,var_map,in_var_map,fun_count,all_var_int):
  			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
  		elif type(statement.left) is c_ast.BinaryOp and type(statement.right) is c_ast.UnaryOp:
  			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
+ 		
+ 		elif type(statement.left) is c_ast.ArrayRef and type(statement.right) is c_ast.BinaryOp:
+ 			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
+ 		elif type(statement.left) is c_ast.BinaryOp and type(statement.right) is c_ast.ArrayRef:
+ 			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
+ 		
+ 		elif type(statement.left) is c_ast.UnaryOp and type(statement.right) is c_ast.ArrayRef:
+ 			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
+ 		elif type(statement.left) is c_ast.ArrayRef and type(statement.right) is c_ast.UnaryOp:
+ 			return c_ast.BinaryOp(op=statement.op,left=reconstructStmt(statement.left,count,var_map,in_var_map,fun_count,all_var_int), right=reconstructStmt(statement.right,count,var_map,in_var_map,fun_count,all_var_int))
+ 		
  		else:
  			return c_ast.BinaryOp(op=statement.op,left=statement.left, right=statement.right)
  	else:
@@ -23161,9 +25479,8 @@ def getAssertAssume(f,o,a,cm):
         		assume_list.append(o[x])
                 elif x.find('_FAILED')>0:
                     #assert_list.append(o[x])
+
                     key_value=x
-                    if key_value is not None:
-                        assert_key_map[key_value]=o[x]
                     new_assert=[]
                     arg_list=expr_args(o[x][1])
                     if len(arg_list)>0:
@@ -23175,10 +25492,14 @@ def getAssertAssume(f,o,a,cm):
                         new_assert.append(o[x][1])
                         new_assert.append('0')
                         assert_list.append(new_assert)
+                        if key_value is not None:
+                            assert_key_map[key_value]=new_assert
                     else:
                         new_assert.append('c1')
                         new_assert.append(['==',o[x][1],['0']])
                         assert_list.append(new_assert)
+                        if key_value is not None:
+                            assert_key_map[key_value]=new_assert
                     new_o[x]=o[x]
         	else:
         		new_o[x]=o[x]
@@ -23207,7 +25528,13 @@ def getAssertAssume(f,o,a,cm):
                         else:
                             update_new_a.append(x)
                     else:
-                        update_new_a.append(x) 
+                        if x[3][1][0]=='_s1':
+                            map_var={}
+                            getAll_PROVE_ASSUME(x[4],map_var)
+                            x[4]=simplify_ind_equation(x[4],map_var.keys())
+                            update_new_a.append(x) 
+                        else:
+                            update_new_a.append(x) 
                 else:
                    update_new_a.append(x) 
         
@@ -23234,10 +25561,14 @@ def getAssertAssume(f,o,a,cm):
                                         #list_conditin=getConditions(o,a,new_word)
 
                                         list_conditin=getConditions(o,update_new_a,new_word)
+                                        print 
                                         con_stmt=None
                                         if list_conditin is not None:
                                             con_stmt=constructAndOrlist(list_conditin,'and')
                                         new_x = copy.deepcopy(x)
+                                        #print '----------------------'
+                                        #print expr2string1(x[4])
+                                        #print '----------------------'
                                         x[4]=assert_filter1(x[4])
                                         var_e1=eval("['_x1']")
                                         x[3][1]=var_e1
@@ -23248,6 +25579,10 @@ def getAssertAssume(f,o,a,cm):
                                             new_stmt.append('implies')
                                             new_stmt.append(con_stmt)
                                             #new_stmt.append(x[4][2])
+                                            #print '----------------------'
+                                            #print expr2string1(con_stmt)
+                                            #print expr2string1(x[4])
+                                            #print '----------------------'
                                             new_stmt.append(x[4])
                                             #x[4][2]=new_stmt
                                             x[4]=new_stmt
@@ -23455,6 +25790,7 @@ def extractAssume(assume_list,cm):
 				if '<' in temp or '>' in temp or '=' in temp:
 					update_assume_stmts.append(stmt)
 			else:
+
 				if stmt[0]=='i1':
 					stmt_assume=[]
 					stmt_assume.append('c1')
@@ -23477,7 +25813,13 @@ def extractAssume(assume_list,cm):
 def assert_filter1(e):
     if e[:1]==['ite']:
         arg_list=expr_args(e)
+        #print '---------@@@@@@@@@@@@@@@1'
+        #print arg_list[0]
+        #print '---------@@@@@@@@@@@@@@@1'
         new_cond=conditionFilter(arg_list[0])
+        #print '---------@@@@@@@@@@@@@@@2'
+        #print new_cond
+        #print '---------@@@@@@@@@@@@@@@2'
         if new_cond==None:
             return arg_list[1]
         else:
@@ -23489,7 +25831,14 @@ def assert_filter1(e):
                 return e
             else:
                 if isArrayFunction(new_cond1[0])==True and '_PROVE' in new_cond1[1][0]:
-                    return new_cond
+                    if isArrayFunction(new_cond2[0])==True and '_PROVE' in new_cond2[1][0]:
+                        return new_cond 
+                    else:
+                        new_stmt=[]
+                        new_stmt.append('implies')
+                        new_stmt.append(expr_complement(new_cond))
+                        new_stmt.append(new_cond2)
+                        return new_stmt
                 else:
                     if '_PROVE' in new_cond1[0]:
                         new_stmt=[]
@@ -24268,7 +26617,8 @@ def updateTypeDef(statement):
     			return temp_ast.ext[0],pointer,array
     		elif type(statement.type) is c_ast.ArrayDecl:
 			degree=0
-    			type_stmt,degree,structType=getArrayDetails(statement,degree)
+                        dimensionmap={}
+    			type_stmt,degree,structType=getArrayDetails(statement,degree,dimensionmap)
 			if type_stmt in typedef_map.keys():
 				type_stmt=typedef_map[type_stmt]
 			program_temp=type_stmt+' '+statement.name
@@ -24674,8 +27024,83 @@ def change_var_name_stmt(statement):
                     #    return renameArrayName(statement)
                     #else:
                     #    return statement
+                elif type(statement) is c_ast.StructRef:
+                    return c_ast.StructRef(name=change_var_name_stmt(statement.name),type=change_var_name_stmt(statement.type),field=statement.field)
                 else:
                     return statement
+
+
+def change_var_name_stmt1(statement,count,var_map,in_var_map,fun_count,all_var_int):
+	if type(statement) is c_ast.BinaryOp:
+		if type(statement.left) is c_ast.ID:
+			if statement.left.name in var_map.keys() or statement.left.name in in_var_map.keys():
+                                if statement.left.name in all_var_int:
+                                    stmt_left=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.left.name)
+                                else:
+                                    stmt_left=statement.left
+			else:
+				stmt_left=statement.left
+		else:
+			stmt_left=change_var_name_stmt1(statement.left)
+            
+		if type(tatement.right) is c_ast.ID:
+			if statement.right.name in var_map.keys() or statement.right.name in in_var_map.keys():
+                                if statement.right.name in all_var_int:
+                                    stmt_right=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.right.name)
+                                else:
+                                    stmt_right=statement.right
+			else:
+				stmt_right=statement.right
+		else:
+			stmt_right=change_var_name_stmt1(statement.right)
+            
+		return c_ast.BinaryOp(op=statement.op, left=stmt_left, right=stmt_right)
+	elif type(statement) is c_ast.UnaryOp:
+		if type(statement.expr) is c_ast.ID:
+			if statement.expr.name in var_map.keys() or statement.expr.name in in_var_map.keys():
+                                if statement.expr.name in all_var_int:
+                                    stmt=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.expr.name)
+                                else:
+                                    stmt=statement.expr
+                        else:
+				stmt=statement.expr
+		else:
+			stmt=change_var_name_stmt1(statement.expr)
+		return c_ast.UnaryOp(op=statement.op, expr=stmt)
+	elif type(statement) is c_ast.ID:
+		if statement.name in var_map.keys() or statement.name in in_var_map.keys():
+			if statement.name in all_var_int:
+                            return c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.name)
+                        else:
+                            return statement
+                            
+		else:
+                        return statement
+        elif type(statement) is c_ast.FuncCall:
+            if statement.args is not None:
+                new_expr=[]
+                for exp in statement.args.exprs:
+                    new_expr.append(change_var_name_stmt1(exp))
+                return c_ast.FuncCall(name=statement.name,args=c_ast.ExprList(exprs=new_expr))
+            else:
+                return statement
+	
+	else:
+		if type(statement) is c_ast.ArrayRef:
+                    return renameArrayName1(statement)
+                    #if checkingArrayName(statement)==True:
+                    #    return renameArrayName(statement)
+                    #else:
+                    #    return statement
+                else:
+                    return statement
+
+
+
+
+
+
+
 
 
 def change_var_name_decl(statement):
@@ -24996,6 +27421,26 @@ def renameArrayName(statement):
         elif type(statement.name) is c_ast.ArrayRef:
             return c_ast.ArrayRef(name=renameArrayName(statement.name),subscript=change_var_name_stmt(statement.subscript))
         
+
+
+def renameArrayName1(statement,count,var_map,in_var_map,fun_count,all_var_int):
+    if type(statement) is c_ast.ArrayDecl:
+        if type(statement.type) is c_ast.TypeDecl:
+            if statement.name in var_map.keys() or statement.name in in_var_map.keys():
+                return c_ast.Decl(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.name, quals=statement.quals, storage=statement.storage, funcspec=statement.funcspec, type=renameArrayName1(statement.type,count,var_map,in_var_map,fun_count,all_var_int), init=statement.init, bitsize=statement.bitsize)
+            else:
+                return c_ast.Decl(name=statement.name, quals=statement.quals, storage=statement.storage, funcspec=statement.funcspec, type=renameArrayName1(statement.type,count,var_map,in_var_map,fun_count,all_var_int), init=statement.init, bitsize=statement.bitsize)
+        elif type(statement.type) is c_ast.ArrayDecl:
+            statement=c_ast.ArrayDecl(type=renameArrayName1(statement.type,count,var_map,in_var_map,fun_count,all_var_int),dim=change_var_name_stmt1(statement.type.dim,count,var_map,in_var_map,fun_count,all_var_int), dim_quals=statement.type.dim_quals)
+            return statement
+    elif type(statement) is c_ast.ArrayRef:
+        if type(statement.name) is c_ast.ID:
+            if statement.name in var_map.keys() or statement.name in in_var_map.keys():
+                return c_ast.ArrayRef(name=c_ast.ID(name='f'+str(fun_count)+'_'+str(count)+'_'+statement.name.name),subscript=change_var_name_stmt1(statement.subscript,count,var_map,in_var_map,fun_count,all_var_int))
+            else:
+                return c_ast.ArrayRef(name=statement.name,subscript=change_var_name_stmt1(statement.subscript,count,var_map,in_var_map,fun_count,all_var_int))
+        elif type(statement.name) is c_ast.ArrayRef:
+            return c_ast.ArrayRef(name=renameArrayName1(statement.name,count,var_map,in_var_map,fun_count,all_var_int),subscript=change_var_name_stmt1(statement.subscript,count,var_map,in_var_map,fun_count,all_var_int))
 
  
  
