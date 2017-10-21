@@ -13,8 +13,8 @@ if sys.argv[1:] != [] and sys.argv[-1] is not None:
 	if len(sys.argv[1:])==1: 
 		viap_svcomp.prove_auto(filename)
 	elif len(sys.argv[1:])==2: 
-		propertfile=sys.argv[-2]
-		if '.prp' in property:
+		propertyfile=sys.argv[-2]
+		if '.prp' in propertfile:
 			viap_svcomp.prove_auto(filename,propertfile)
 		else:
 			viap_svcomp.prove_auto(filename)	
