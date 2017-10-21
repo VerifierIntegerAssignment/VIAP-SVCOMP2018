@@ -12,7 +12,7 @@ Fangzhen Lin (HKUST)
 
 ## Installation
 ```
-Untar: tar jxf VIAP-SVCOMP2018.tar.bz2
+Untar: tar -xvf VIAP-SVCOMP2018.zip
 ```
 
 ## Run
