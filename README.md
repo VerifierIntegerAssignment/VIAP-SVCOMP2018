@@ -22,9 +22,6 @@ Untar: tar jxf VIAP-SVCOMP2018.tar.bz2
   
 ## Options
 ```
---wtd=WTD WTD is the location where to store the counter-example.
-```
-```
 --spec=SPEC SPEC is the property file.
 ```
 ## Categories
