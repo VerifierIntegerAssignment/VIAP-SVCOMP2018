@@ -497,14 +497,18 @@ class SLexer(object):
 		#Create a subsitition Map
 		type_value_map={}
 		for item in typedef_list:
+                        
 			if not item.isFlagStruct():
 				type_value_map[item.getTypename().value]=item.getTypevalue()
 			else:
 				if item.getTypevalue()[1] is not None and item.getTypevalue()[1].type=='ID':
 					type_value_map[item.getTypename()[-1].value]=item.getTypevalue()
+                                elif item.isFlagStruct()==True and item.getTypevalue()[1].type=='LCURLY' and item.getTypename() is not None:
+                                        temp_stmt=[]
+                                        temp_stmt.append(item.getTypevalue()[0])
+                                        temp_stmt.append(item.getTypename()[0])
+                                        type_value_map[item.getTypename()[-1].value]=temp_stmt
 					
-		
-		
 		program_mod=[]
 		for item in self.program:
 			if item.type=='ID' and item.value in type_value_map.keys():
