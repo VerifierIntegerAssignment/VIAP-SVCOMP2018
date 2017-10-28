@@ -615,6 +615,128 @@ def evaluateConditionArray(e,array_list):
 
 
 
+#def evaluateCondition(e,array_list):
+#	if e[:1]==['and']:
+#		status=None
+#		for x in expr_args(e):
+#			parameter=simplify_ind_equation(x,array_list)
+#			expression=expr2string1(parameter)
+#			if  parameter[0]== '=' and 'and' not in expression and 'or' not in expression and 'implies' not in expression and 'ite' not in expression:
+#				left=expr2string1(parameter[1])
+#				right=expr2string1(parameter[2])
+#				c_status=simplify(left)==simplify(right)
+#				if c_status==True:
+#					if status==None:
+#						status='True'
+#					elif status=='Unknown':
+#						status='Unknown'
+#					elif status=='False':
+#						status='False'
+#					elif status=='True':
+#						status='True'
+#					else:
+#						status='Unknown'
+#				elif c_status==False and left in array_list and right in array_list:
+#					status='False'
+#                                elif c_status==False and status==None:
+#                                        status='False'
+#				else:
+#					if status=='False':
+#                                                #status_ieq1=simplify(left)>=simplify(right)
+#                                                #status_ieq2=simplify(left)<=simplify(right)
+#                                                #if status_ieq1==False
+#						status='False'
+#					else:
+#						status_ieq2=simplify(simplify(left)<=simplify(right))
+#						status_ieq1=simplify(simplify(left)>=simplify(right))
+#                                                if status_ieq1==True and status_ieq2==False:
+#                                                    status='False'
+#                                                elif status_ieq1==False and status_ieq2==True:
+#                                                    status='False'
+#                                                else:
+#                                                    status='Unknown'
+#			else:
+#				if status=='False':
+#					status='False'
+#				else:
+#					status='Unknown'
+#		return status
+#	elif e[:1]==['or']:
+#		status=None
+#		for x in expr_args(e):
+#			parameter=simplify_ind_equation(x,array_list)
+#			expression=expr2string1(parameter)
+#			if  parameter[0] is '=' and 'and' not in expression and 'or' not in expression and 'implies' not in expression and 'ite' not in expression:
+#				left=expr2string1(expr2string1(parameter[1]))
+#				right=expr2string1(expr2string1(parameter[2]))
+#				c_status=simplify(left)==simplify(right)
+#				if c_status==True:
+#					if status==None:
+#						status='True'
+#					elif status=='Unknown':
+#						status='True'
+#					elif status=='False':
+#						status='True'
+#					elif status=='True':
+#						status='True'
+#					else:
+#						status='Unknown'
+#				elif c_status==False and left in array_list and right in array_list:
+#					status='False'
+#				else:
+#					if status=='True':
+#						status='True'
+#					else:
+#						status='Unknown'
+#			else:
+#				if status=='True':
+#					status='True'
+#				else:
+#					status='Unknown'
+#		return status
+
+
+
+
+#def evaluateConditionModify(e,array_list):
+#        modify_parameter=[]
+#	if e[:1]==['and']:
+#		status=None
+#		for x in expr_args(e):
+#			parameter=simplify_ind_equation(x,array_list)
+#			expression=expr2string1(parameter)
+#			if  parameter[0]== '=' and 'and' not in expression and 'or' not in expression and 'implies' not in expression and 'ite' not in expression:
+#				left=expr2string1(parameter[1])
+#				right=expr2string1(parameter[2])
+#				c_status=simplify(left)==simplify(right)
+#				if c_status!=True:
+#                                    modify_parameter.append(x)
+#			else:
+#                                modify_parameter.append(x)
+#		if len(modify_parameter)==1:
+#                    return modify_parameter[0]
+#                else:
+#                    return e[:1]+modify_parameter
+#	elif e[:1]==['or']:
+#		status=None
+#		for x in expr_args(e):
+#			parameter=simplify_ind_equation(x,array_list)
+#			expression=expr2string1(parameter)
+#			if  parameter[0] is '=' and 'and' not in expression and 'or' not in expression and 'implies' not in expression and 'ite' not in expression:
+#				left=expr2string1(expr2string1(parameter[1]))
+#				right=expr2string1(expr2string1(parameter[2]))
+#				c_status=simplify(left)==simplify(right)
+#				if c_status!=True:
+#                                    modify_parameter.append(x)
+#                        else:
+#                            modify_parameter.append(x)
+#		if len(modify_parameter)==1:
+#                    return modify_parameter[0]
+#                else:
+#                    return e[:1]+modify_parameter
+
+
+
 def evaluateCondition(e,array_list):
 	if e[:1]==['and']:
 		status=None
@@ -694,8 +816,13 @@ def evaluateCondition(e,array_list):
 				else:
 					status='Unknown'
 		return status
-
-
+        elif e[:1]==['='] and e[1][0] in array_list and  e[1][0] in array_list and e[1][0]!=e[2][0]:
+            status='False'
+            return status
+        elif e[:1]==['='] and e[1][0] in array_list and  e[1][0] in array_list and e[1][0]==e[2][0]:
+            status='True'
+            return status
+            
 
 
 def evaluateConditionModify(e,array_list):
@@ -734,6 +861,16 @@ def evaluateConditionModify(e,array_list):
                     return modify_parameter[0]
                 else:
                     return e[:1]+modify_parameter
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6939,6 +7076,7 @@ def prove_auto_process(program):
                                         
                                     if isQuantified is None or len(array_map.keys())==0:
                                         #status=prove_assert_tactic4_update1(axiom,witnessXml)
+                                        #return
                                         status=prove_assert_tactic1(axiom,witnessXml)
                                         if "Successfully Proved" in status:
                                             main_status="True"
@@ -7007,7 +7145,7 @@ def prove_auto_process(program):
                                         print "Unknown"
                                         return
                 if main_status is "True":
-                    print 'True'
+                    print 'VIAP_STANDARD_OUTPUT_True'
                 else:
                     print "Unknown"
                 
@@ -8304,7 +8442,7 @@ def prove_assert_tactic4_update1(axiom,witnessXml):
 	
 	for [x,k,l] in axiom.getVfact():
 		if k==0 and l[0]=='array' and isArrayFinal(x)==False and not(x=='main'):
-                        if str(array_degree_map[x]) in array_init_map.keys():
+                        if x in array_degree_map.keys() and str(array_degree_map[x]) in array_init_map.keys():
                             array_list.append(x)
                             #array_fun_map[x]=array_init_map[str(array_degree_map[x])]
         var_list=axiom.getConst_var_map().keys()
@@ -8447,7 +8585,7 @@ def prove_assert_tactic4_update1(axiom,witnessXml):
 
                                 array_fun_map_temp={}
                                 
-                                
+
                                 for e_array in array_list:
                                     
                                         if e_array in array_fun_map.keys() and e[3][0][1]==str(array_degree_map[e_array]):
@@ -8463,6 +8601,8 @@ def prove_assert_tactic4_update1(axiom,witnessXml):
                                                 
 						free_var_map={}
                                                 
+                                           
+                                                
                                                 getAllFreeVariable(copy.deepcopy(new_e1[4]),inst_str,free_var_map)
 
                                                 if not free_var_map:
@@ -8474,14 +8614,14 @@ def prove_assert_tactic4_update1(axiom,witnessXml):
                                                     new_e1[4]=expr_replace(expr_modify(new_e1[4],inst_str,free_var_map),eval("['_x1']"),eval("['"+e_array+"']"))
                                                     
 						new_e1[4]=simplify_ind_equation(new_e1[4],array_list)
-                                                
 
                                                 if e_array in ins_array_lsit:
                                                     for f_var in free_var_map.keys():
                                                             new_e1[3]=expr_replace(new_e1[3],eval("['"+f_var+"']"),free_var_map[f_var])
                                                             new_e1[4]=expr_replace(new_e1[4],eval("['"+f_var+"']"),free_var_map[f_var])
-                                                
+
                                                 array_fun_map_temp[e_array]=expr_update_iter(new_e1[4],array_fun_map)
+
                                                 if e_array in ins_array_lsit:
                                                     parameter_list=[]
                                                     for x in range(2, int(e[3][0][1])+2):
@@ -8493,8 +8633,22 @@ def prove_assert_tactic4_update1(axiom,witnessXml):
                                                         new_e_left[x]=array_fun_map_parameter[e_array][x-2]
                                                 new_e2[3]=new_e_left
                                                 new_e2[4]=array_fun_map_temp[e_array]
+                                                
+                                                index_var_map={}
+                                                
+                                                getIndexVaribles(new_e2[4],index_var_map)
+                                                
+                                                #print '%%%%%%%%%%%%%%%%%%%%%%%%%'
+                                                #print index_var_map
+                                                #print '%%%%%%%%%%%%%%%%%%%%%%%%%'
+                                                
+                                                if not free_var_map:
+                                                    new_e2[4] = expr_modify_array(new_e2[4],inst_str,free_var_map)
                                                 instant_eq.append(new_e2)
                                                 add_equation_d.append(new_e2)
+                                                
+                                                
+                                                #getAllFreeVariable(x,e1,free_var_map)
                                 
                                 
                                 for x in array_fun_map_temp:
@@ -8800,6 +8954,29 @@ def prove_assert_tactic4_update1_Rec(axiom,array_list,call_var_list,instant_eq,a
 
         				return query_map_list,var_const_map				
        return None,None			
+
+
+
+def getIndexVaribles(e,index_var_map):
+        if e[:1]==['and']:
+        	for x in expr_args(e):
+                    if x[0]=='=' and isvariable(x[1][0])==True:
+                        if x[1][0] not in free_var_map.keys() :
+                            index_var_map[x[1][0]]=x[2]
+
+        elif e[:1]==['ite']:
+        	for x in expr_args(e):
+                    if x[0]=='=' and isvariable(x[1][0])==True:
+                        if x[1][0] not in free_var_map.keys():
+                            index_var_map[x[1][0]]=x[2]
+
+        else:
+            for x in expr_args(e):
+                getIndexVaribles(x,index_var_map)
+
+
+
+
 
 
 
@@ -11266,12 +11443,47 @@ def getAllFreeVariable3(e,order):
 
 
 
+#def expr_modify(e,e1,free_var_map): #e,e1,e2: expr
+#        if e[:1]==['and']:
+#        	temp=[]
+#        	for x in expr_args(e):
+#        		if x!=e1:
+#        			if x[0]=='=' and isvariable(x[1][0])==True :
+#        				free_var_map[x[1][0]]=x[2]
+#        			else:
+#        				parameter=expr_modify(x,e1,free_var_map)
+#        				if parameter is not None:
+#        					temp.append(parameter)
+#        	if len(temp)==0:
+#        		return None
+#        	elif len(temp)==1:
+#        		return expr_modify(temp[0],e1,free_var_map)
+#        	else:
+#        		return e[:1]+temp
+#        elif e[:1]==['ite']:
+#        	temp=[]
+#        	for x in expr_args(e):
+#        		if x!=e1:
+#        			if x[0]=='=' and isvariable(x[1][0])==True:
+#        				free_var_map[x[1][0]]=x[2]
+#        			else:
+#        				parameter=expr_modify(x,e1,free_var_map)
+#        				if parameter is not None:
+#        					temp.append(parameter)
+#        	if len(temp)==2:
+#        		return expr_modify(temp[0],e1,free_var_map)
+#        	else:
+#        		return e[:1]+temp
+#        else:
+#        	return e[:1]+list(expr_modify(x,e1,free_var_map) for x in expr_args(e))
+                
+                
 def expr_modify(e,e1,free_var_map): #e,e1,e2: expr
         if e[:1]==['and']:
         	temp=[]
         	for x in expr_args(e):
         		if x!=e1:
-        			if x[0]=='=' and isvariable(x[1][0])==True:
+        			if x[0]=='=' and isvariable(x[1][0])==True and x[1][0]!='_x1':
         				free_var_map[x[1][0]]=x[2]
         			else:
         				parameter=expr_modify(x,e1,free_var_map)
@@ -11287,7 +11499,7 @@ def expr_modify(e,e1,free_var_map): #e,e1,e2: expr
         	temp=[]
         	for x in expr_args(e):
         		if x!=e1:
-        			if x[0]=='=' and isvariable(x[1][0])==True:
+        			if x[0]=='=' and isvariable(x[1][0])==True and x[1][0]!='_x1':
         				free_var_map[x[1][0]]=x[2]
         			else:
         				parameter=expr_modify(x,e1,free_var_map)
@@ -12995,7 +13207,8 @@ def query2z3(constraint_list,conclusion,vfact,inputmap,witnessXml):
 				elif l[0]=="constant":
 					pythonProgram+='\t'+x+"=Const(\'"+x+"\',IntSort())\n"
 				elif l[0]=="array":
-					pythonProgram+='\t'+x+"=Const(\'"+x+"\',arraySort)\n"
+					if 'array(' not in x:
+                                            pythonProgram+='\t'+x+"=Const(\'"+x+"\',arraySort)\n"
 				else:
 					pythonProgram+='\t'+x+"=Int(\'"+x+"\')\n"
                                 duplicate_map[x]=x
@@ -13111,7 +13324,8 @@ def query2z3_update(constraint_list,conclusion,vfact,witnessXml):
 				elif l[0]=="constant":
 					pythonProgram+='\t'+x+"=Const(\'"+x+"\',IntSort())\n"
 				elif l[0]=="array":
-					pythonProgram+='\t'+x+"=Const(\'"+x+"\',arraySort)\n"
+					if 'array(' not in x:
+                                            pythonProgram+='\t'+x+"=Const(\'"+x+"\',arraySort)\n"
 				else:
 					pythonProgram+='\t'+x+"=Int(\'"+x+"\')\n"
                                 duplicate_map[x]=x
@@ -13228,7 +13442,8 @@ def query2z3_cond(constraint_list,conclusion,vfact):
 				elif l[0]=="constant":
 					pythonProgram+='\t'+x+"=Const(\'"+x+"\',IntSort())\n"
 				elif l[0]=="array":
-					pythonProgram+='\t'+x+"=Const(\'"+x+"\',arraySort)\n"
+					if 'array(' not in x:
+                                            pythonProgram+='\t'+x+"=Const(\'"+x+"\',arraySort)\n"
 				else:
 					pythonProgram+='\t'+x+"=Int(\'"+x+"\')\n"
                                 duplicate_map[x]=x
@@ -14792,6 +15007,7 @@ def prove_auto(file_name,property=None):
         fun_substitution_map={}
         function_vfacts=[]
         program_analysis=''
+        program_analysis2=''
         program_analysis_decl=''
         program_analysis_var_decl=''
         current_fun_call=None
@@ -15253,7 +15469,7 @@ def prove_auto(file_name,property=None):
     			
     			try:
                             
-                            program,variablesarray,fname,iputmap,opvariablesarray,module_analysis=translate2IntForm(membermethod.getMethodname(),membermethod.getreturnType(),membermethod.getBody(),membermethod.getInputvar(),membermethod.getTempoary(),membermethod.getAnalysis_module(),struct_map)
+                            program,variablesarray,fname,iputmap,opvariablesarray,module_analysis,module_analysis2=translate2IntForm(membermethod.getMethodname(),membermethod.getreturnType(),membermethod.getBody(),membermethod.getInputvar(),membermethod.getTempoary(),membermethod.getAnalysis_module(),struct_map)
 
                         except Exception as e:
                             #print 'Error(error occurred during translation intermediate format)'
@@ -15334,7 +15550,9 @@ def prove_auto(file_name,property=None):
                             #print '^^^^^^^^^^^^^^^^^^^'
                             if 'main' not in program_decl:
                                 program_analysis_decl+=programPrint(membermethod.getFun_decl())+';\n'
+                            program_analysis2=program_decl+programPrint(module_analysis2)+program_analysis
                             program_analysis=program_decl+programPrint(module_analysis)+program_analysis
+                            
         
         
         program_analysis=program_analysis_var_decl+program_analysis
@@ -15459,6 +15677,8 @@ def prove_auto(file_name,property=None):
                 end_time=current_milli_time()
                 #print "Translation Time--"
 		#print end_time-start_time
+                #AssetionAnalysis2(program_analysis2,program_analysis_decl)
+                #return
                 results=AssetionAnalysis(program_analysis,program_analysis_decl)
                 #print '$$$$$$$$$$$$$$$$$'
                 #print results
@@ -15492,7 +15712,10 @@ def prove_auto(file_name,property=None):
                                 assertion=assert_key_list[key]
                                 if '_FAILED' not in key:
                                     #print 'Assertion :'+wff2z3_update_postCond(assertion)
-                                    print 'False'
+                                    #print 'False'
+                                    #violation_status=violationWitness(filename)
+                                    #if violation_status is not None and 'False' in violation_status:
+                                    print 'VIAP_STANDARD_OUTPUT_False'
                                     test_int_mid=None
                                     test_uint_mid=None
                                     test_char_mid=None
@@ -15565,7 +15788,10 @@ def prove_auto(file_name,property=None):
                                             if key in x[1][1][0]:
                                                 #print 'Assertion :'+wff2z3_update_postCond(x)
                                                 assert_list.remove(x)
-                                    print 'False'
+                                    #print 'False'
+                                    #violation_status=violationWitness(filename)
+                                    #if violation_status is not None and 'False' in violation_status:
+                                    print 'VIAP_STANDARD_OUTPUT_False'
                                     test_int_mid=None
                                     test_uint_mid=None
                                     test_char_mid=None
@@ -16579,8 +16805,12 @@ def AssetionAnalysis(program_analysis,program_analysis_decl):
             #output = proc.stdout.read()
             #output, err = proc.communicate()
             #print '##################---------------'
+            start_time=current_milli_time()
             command = commandclass.Command(currentdirectory+"/input_program")
             output = command.run(timeout=60)
+            end_time=current_milli_time()
+            if end_time-start_time >300:
+                return None
             status=output
             if status is not None and 'Termination Failed' not in status:
                 outputs_list = status.split('--------\n')
@@ -16596,6 +16826,27 @@ def AssetionAnalysis(program_analysis,program_analysis_decl):
         return map_asserts        
     except OSError  as err:
         print 'Error Occured'
+        
+        
+def AssetionAnalysis2(program_analysis,program_analysis_decl):
+    map_asserts={}
+
+    program_analysis = program_analysis.replace('_Bool','int')
+    program_analysis="#include <time.h>\n#include <stdlib.h>\n#include <stdio.h>\nchar _count_char='\\0';\nunsigned int _count=0;\nint _count_int=0;\ndouble _count_double=0.0;\nfloat _count_float=0.0f;\nint __VERIFIER_nondet_bool(int callcount)\n{\nint value;\n_count++;\nsrand(_count+(unsigned int)time(NULL));\nsrand(rand());\nvalue=rand()%2;\nprintf(\"__VERIFIER_nondet_bool:%d:%d\\n\",callcount,value);\nreturn value;\n}\nchar __VERIFIER_nondet_char(int callcount)\n{\nchar value;\n_count_char++;\nsrand(_count_int+(char)time(NULL));\nsrand(rand());\nvalue=rand()%1000;\nprintf(\"__VERIFIER_nondet_char:%d:%c\\n\",callcount,value);\nreturn value;\n}\nint __VERIFIER_nondet_int(int callcount)\n{\nint value;\n _count_int++;\nsrand(_count_int+(int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nprintf(\"__VERIFIER_nondet_int:%d:%d\\n\",callcount,value);\nreturn value;\n}\n"+"\nunsigned int __VERIFIER_nondet_uint(int callcount)\n{\nunsigned int value;\n _count++;\nsrand(_count+(unsigned int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nprintf(\"__VERIFIER_nondet_uint:%d:%d\\n\",callcount,value);\nreturn value;\n}\n"+"\ndouble __VERIFIER_nondet_double(int callcount)\n{\ndouble value;\n _count++;\nsrand(_count_double+(double)time(NULL));\n srand(rand());\n value=rand()%1000;\nprintf(\"%d:%lf\\n\",callcount,value);\nreturn value;\n}\n"+"\nfloat __VERIFIER_nondet_float(int callcount)\n{\nfloat value;\n _count++;\nsrand(_count_float+(float)time(NULL));\n srand(rand());\n \n value=rand()%1000;\nprintf(\"__VERIFIER_nondet_float:%d:%f\\n\",callcount,value);\nreturn value;\n}\n"+program_analysis_decl+program_analysis
+    writtingFile( "input_program1.c" , program_analysis )
+
+
+
+ 
+def extractFileName(filename):
+    if filename is not None:
+        filename_list=filename.strip().split('/')
+        return filename_list[-1]
+    return None
+
+
+
+
 
 
 #def processOutput(outputs_list):
@@ -18784,8 +19035,10 @@ def translate2IntForm(function_name,function_type,function_body,parametermap,tem
     
     membermethod=membermethodclass(function_name,function_type,parametermap,localvarmap,function_body,0,0,tempory,function_body_pa,None)
     
+    input_value_extract=constructProgAssertAnalysis2(copy.deepcopy(membermethod.getAnalysis_module()),localvarmap,membermethod.getInputvar())
     
     membermethod.setAnalysis_module(constructProgAssertAnalysis(membermethod.getAnalysis_module(),localvarmap,membermethod.getInputvar()))
+    
     
     #print '!!!!!!!!!!!!!!!!!!'
     #print(generator.visit(membermethod.getAnalysis_module()))
@@ -18938,7 +19191,7 @@ def translate2IntForm(function_name,function_type,function_body,parametermap,tem
     #print str_program
     #print '%%%%%%%%%%%%%%%%%%%%%%%%%%%'
     program=eval(str_program)
-    return program,variablesarray,membermethod.getMethodname(),membermethod.getInputvar(),opvariablesarray,membermethod.getAnalysis_module()
+    return program,variablesarray,membermethod.getMethodname(),membermethod.getInputvar(),opvariablesarray,membermethod.getAnalysis_module(),input_value_extract
 
 
 
@@ -19277,6 +19530,19 @@ def constructProgAssertAnalysis(functionbody,localvariables,inputvariables):
     functionbody=c_ast.Compound(block_items=addPrintStmt(functionbody.block_items,localvariables,inputvariables))
     return functionbody
 
+count__VERIFIER_nondet=0
+
+def constructProgAssertAnalysis2(functionbody,localvariables,inputvariables):
+    #arg_list=[]
+    #arg_list.append(c_ast.Constant(type="string", value="\"j:%d\\n\""))
+    #arg_list.append(c_ast.ID(name="j"))
+    #print_function=c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list))
+    #global count__VERIFIER_nondet
+    #count__VERIFIER_nondet=0
+    #functionbody.block_items=modify__VERIFIER_nondet_block(functionbody.block_items)
+    #functionbody=c_ast.Compound(block_items=addPrintStmt2(functionbody.block_items,localvariables,inputvariables))
+    return functionbody
+
 def getAllNodesOfAssetion(statement,map_nodes):
     if type(statement) is c_ast.BinaryOp:
         if type(statement.left) is c_ast.BinaryOp:
@@ -19435,6 +19701,209 @@ def addPrintStmtIf(statement,localvariables,inputvariables):
             Else_stmt=statement.iffalse
     return c_ast.If(cond=statement.cond, iftrue=If_stmt, iffalse=Else_stmt)
 
+
+
+
+
+
+def addPrintStmt2(statements,localvariables,inputvariables):
+    update_statements=[]
+    for statement in statements:
+        if type(statement) is c_ast.Assignment:
+            if type(statement.lvalue) is c_ast.ID and '_PROVE' in statement.lvalue.name:
+                update_statements.append(statement)
+                nodes=[]
+                list_variables=[]
+                #getAllNodesOfAssetion(statement.rvalue,nodes)
+                update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
+                #for node in nodes:
+                #        if type(node) is c_ast.ID:
+                #            list_variables.append(node.name)
+                #        update_statements.append(createPrint(node,localvariables,inputvariables))
+                #for var in localvariables.keys():
+                #    varObject=localvariables[var]
+                #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
+                #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
+                #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
+                #arg_list=[]
+                #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
+                #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+            
+            elif type(statement.lvalue) is c_ast.ID and '_FAILED' in statement.lvalue.name and type(statement.rvalue) is c_ast.Constant and statement.rvalue.value=='1':
+                update_statements.append(statement)
+                nodes=[]
+                list_variables=[]
+                #getAllNodesOfAssetion(statement.rvalue,nodes)
+                update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
+                #for node in nodes:
+                #        if type(node) is c_ast.ID:
+                #            list_variables.append(node.name)
+                #        update_statements.append(createPrint(node,localvariables,inputvariables))
+                #for var in localvariables.keys():
+                #    varObject=localvariables[var]
+                #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
+                #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
+                #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
+                #arg_list=[]
+                #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
+                #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))            
+            
+            
+            elif type(statement.lvalue) is c_ast.ID and '_ASSUME' in statement.lvalue.name and type(statement.rvalue) is c_ast.BinaryOp:
+                update_statements.append(statement)
+                nodes=[]
+                list_variables=[]
+                #getAllNodesOfAssetion(statement.rvalue,nodes)
+                update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
+                #arg_list=[]
+                #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
+                #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+            
+            
+            
+            else:
+                if type(statement.lvalue) is c_ast.ArrayRef and '_PROVE' in getArrayRef_Name(statement.lvalue):
+                    update_statements.append(statement)
+                    nodes=[]
+                    list_variables=[]
+                    #getAllNodesOfAssetion(statement.rvalue,nodes)
+                    update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
+                    #for node in nodes:
+                    #    if type(node) is c_ast.ID:
+                    #        list_variables.append(node.name)
+                    #    update_statements.append(createPrint(node,localvariables,inputvariables))
+                    #for var in localvariables.keys():
+                    #    varObject=localvariables[var]
+                    #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
+                    #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
+                    #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
+                    #arg_list=[]
+                    #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
+                    #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+                
+                elif type(statement.lvalue) is c_ast.ID and '_FAILED' in statement.lvalue.name and  type(statement.rvalue) is c_ast.Constant and statement.rvalue.value=='1':
+                    update_statements.append(statement)
+                    nodes=[]
+                    list_variables=[]
+                    #getAllNodesOfAssetion(statement.rvalue,nodes)
+                    update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
+                    #for node in nodes:
+                    #        if type(node) is c_ast.ID:
+                    #            list_variables.append(node.name)
+                    #        update_statements.append(createPrint(node,localvariables,inputvariables))
+                    #for var in localvariables.keys():
+                    #    varObject=localvariables[var]
+                    #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
+                    #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
+                    #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
+                    #arg_list=[]
+                    #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
+                    #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list))) 
+                
+                elif type(statement.lvalue) is c_ast.ArrayRef and '_ASSUME' in getArrayRef_Name(statement.lvalue):
+                    update_statements.append(statement)
+                    nodes=[]
+                    list_variables=[]
+                    #getAllNodesOfAssetion(statement.rvalue,nodes)
+                    update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
+                    #arg_list=[]
+                    #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
+                    #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+                        
+                else:
+                    update_statements.append(statement)
+        elif type(statement) is c_ast.While:
+            update_statements.append(c_ast.While(cond=statement.cond, stmt=c_ast.Compound(block_items=addPrintStmt2(statement.stmt.block_items,localvariables,inputvariables))))
+        elif type(statement) is c_ast.If:
+            update_statements.append(addPrintStmtIf2(statement,localvariables,inputvariables))
+        else:
+            update_statements.append(statement)
+    
+    return update_statements
+
+
+
+def addPrintStmtIf2(statement,localvariables,inputvariables):
+    If_stmt=None
+    Else_stmt=None
+    if type(statement) is c_ast.If:
+        if type(statement.iftrue) is c_ast.Compound:
+            new_block_temp=addPrintStmt2(statement.iftrue.block_items,localvariables,inputvariables)
+            If_stmt=c_ast.Compound(block_items=new_block_temp)
+        else:
+            If_stmt=statement.iftrue
+    if type(statement.iffalse) is c_ast.Compound:
+        if statement.iffalse.block_items is not None:
+            new_block_temp=addPrintStmt2(statement.iffalse.block_items,localvariables,inputvariables)
+            Else_stmt=c_ast.Compound(block_items=new_block_temp)
+        else:
+            Else_stmt=statement.iffalse
+    else:
+        if type(statement.iffalse) is c_ast.If:
+            Else_stmt=addPrintStmtIf2(statement.iffalse,localvariables,inputvariables)
+        else:
+            Else_stmt=statement.iffalse
+    return c_ast.If(cond=statement.cond, iftrue=If_stmt, iffalse=Else_stmt)
+
+
+def modify__VERIFIER_nondet_block(statements):
+    update_statements=[]
+    for statement in statements:
+        if type(statement) is c_ast.Assignment:
+            update_statements.append(modify__VERIFIER_nondet_stmt(statement))
+        elif type(statement) is c_ast.While:
+            update_statements.append(c_ast.While(cond=modify__VERIFIER_nondet_stmt(statement.cond), stmt=c_ast.Compound(block_items=modify__VERIFIER_nondet_block(statement.stmt.block_items))))
+        elif type(statement) is c_ast.If:
+            update_statements.append(modify__VERIFIER_nondet_blockIf(statement))
+        else:
+            update_statements.append(statement)
+    
+    return update_statements
+    
+def modify__VERIFIER_nondet_blockIf(statement):
+    If_stmt=None
+    Else_stmt=None
+    if type(statement) is c_ast.If:
+        if type(statement.iftrue) is c_ast.Compound:
+            new_block_temp=modify__VERIFIER_nondet_block(statement.iftrue.block_items)
+            If_stmt=c_ast.Compound(block_items=new_block_temp)
+        else:
+            If_stmt=statement.iftrue
+    if type(statement.iffalse) is c_ast.Compound:
+        if statement.iffalse.block_items is not None:
+            new_block_temp=modify__VERIFIER_nondet_block(statement.iffalse.block_items)
+            Else_stmt=c_ast.Compound(block_items=new_block_temp)
+        else:
+            Else_stmt=statement.iffalse
+    else:
+        if type(statement.iffalse) is c_ast.If:
+            Else_stmt=modify__VERIFIER_nondet_block(statement.iffalse)
+        else:
+            Else_stmt=statement.iffalse
+    return c_ast.If(cond=statement.cond, iftrue=If_stmt, iffalse=Else_stmt)
+    
+    
+    
+def modify__VERIFIER_nondet_stmt(statement):
+    global count__VERIFIER_nondet
+    if type(statement) is c_ast.BinaryOp:
+        return c_ast.BinaryOp(op=statement.op,left=modify__VERIFIER_nondet_stmt(statement.left),right=modify__VERIFIER_nondet_stmt(statement.right))
+    elif type(statement) is c_ast.Assignment:
+        return c_ast.Assignment(op=statement.op,lvalue=modify__VERIFIER_nondet_stmt(statement.lvalue),rvalue=modify__VERIFIER_nondet_stmt(statement.rvalue))
+    elif type(statement) is c_ast.FuncCall:
+        if '__VERIFIER_nondet' in statement.name.name:
+            if statement.args is None:
+                arg_list=[]
+                count__VERIFIER_nondet=count__VERIFIER_nondet+1
+                arg_list.append(c_ast.Constant(type="int", value=str(count__VERIFIER_nondet)))
+                return c_ast.FuncCall(name=statement.name, args=c_ast.ExprList(exprs=arg_list))
+            else:
+                return statement
+        else:
+            return statement
+    else:
+        return statement
+    
 
 
 def getArrayRef_Name(statement):
