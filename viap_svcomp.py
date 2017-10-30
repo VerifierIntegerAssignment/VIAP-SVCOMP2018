@@ -8093,6 +8093,23 @@ def update_assertion(axiom,witnessXml):
         
 	for x in out_axioms:
 		constraint_list.append(x)
+                
+
+                
+        for x in axiom.getOutput_equations():
+            if axiom.getOutput_equations()[x][1][0]!='main':
+                getAllCondtion_tactic8(axiom.getOutput_equations()[x],condition_map)
+            
+        if len(condition_map)==1:
+            for x in condition_map:
+                temp_temp=[]
+                temp_temp.append('s0')
+                temp_temp.append(condition_map[x])
+                constraint_list.append(wff2z3_update(temp_temp))
+                
+
+
+
 	for x in axiom.getOther_axioms(): 
         	equations=wff2z3_update(x)
         	equations_sp=None
