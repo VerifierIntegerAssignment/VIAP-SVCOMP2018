@@ -65,6 +65,7 @@ import random
 #add by Pritom Rajkhowa
 #import numpy as np
 import resource
+import hashlib
 #import wolframalpha
 #import sys
 import itertools
@@ -7076,6 +7077,7 @@ def prove_auto_process(program):
                                         
                                     if isQuantified is None or len(array_map.keys())==0:
                                         #status=prove_assert_tactic4_update1(axiom,witnessXml)
+                                        #status=prove_assert_tactic10(axiom,witnessXml)
                                         #return
                                         status=prove_assert_tactic1(axiom,witnessXml)
                                         if "Successfully Proved" in status:
@@ -8037,6 +8039,7 @@ def update_assertion(axiom,witnessXml):
         
         small_macro_eq=[]
         
+        
 	for w in axiom.getAssumes():
 		if w[0]=='i1':
 			var_cstr_map={}
@@ -8082,6 +8085,7 @@ def update_assertion(axiom,witnessXml):
 				else:
                 			pre_condition.append(rhs)
 	
+
 	str_value,word=axiom.getAsserts()
         
 	frame_axioms=eqset2constraintlist_update(axiom.getFrame_axioms())
@@ -8090,25 +8094,17 @@ def update_assertion(axiom,witnessXml):
 	out_axioms=eqset2constraintlist_update(axiom.getOutput_equations())
 
 	subs_list=eqset2subs_list(axiom.getOutput_equations())
-        
-	for x in out_axioms:
-		constraint_list.append(x)
-                
-
-                
         for x in axiom.getOutput_equations():
             if axiom.getOutput_equations()[x][1][0]!='main':
                 getAllCondtion_tactic8(axiom.getOutput_equations()[x],condition_map)
-            
+	for x in out_axioms:
+		constraint_list.append(x)
         if len(condition_map)==1:
             for x in condition_map:
                 temp_temp=[]
                 temp_temp.append('s0')
                 temp_temp.append(condition_map[x])
                 constraint_list.append(wff2z3_update(temp_temp))
-                
-
-
 
 	for x in axiom.getOther_axioms(): 
         	equations=wff2z3_update(x)
@@ -8166,7 +8162,10 @@ def prove_assert_tactic9(axiom,witnessXml):
     
     small_macro_eq = update_assertion(axiom,witnessXml)
     
+    
     str_value,word=axiom.getAsserts() 
+
+    
     
     pre_condition=[]
     post_condition=[]
@@ -8187,6 +8186,7 @@ def prove_assert_tactic9(axiom,witnessXml):
         size_after=len(inst_other_axioms)
         
         post_condition.append(wff2z3_update1(inst_word,axiom.getConst_var_map()))
+        
         
         for w in axiom.getAssumes():
             if w[0]=='i1':
@@ -14653,334 +14653,19 @@ def organizeInnerDeclartionIf(statement,dec_statements):
 
 
 
-#file_name='functionTest2.c'
 
-#file_name='functionTest4.c'
-
-#file_name='mcmillan2006_true_unreach_call.c'
-
-def translate_backup(file_name):
-	if not(os.path.exists(file_name)): 
-        	print "File not exits"
-		return
-
-	start_time=current_milli_time()
-	content=None
-	global new_variable
-	global fail_count
-	global error_count
-	global assume_count
-        global assert_count
-        global defineMap
-        global defineDetaillist
-        fail_count=0
-        error_count=0
-        assume_count=0
-        assert_count=0
-	with open(file_name) as f:
-		content = f.read()
-	content=comment_remover_file(content)
-	content=content.replace('\r','')
-	defineMap={}
-	content,defineMap=preProcessorHandling(content)
-	text = r""" """+content
-	parser = c_parser.CParser()
-	#ast = parse_file(file_name, use_cpp=True)
-	ast = parser.parse(text)
-	#Type defination replacement
-	getAllTypeDef(ast)
-	generator = c_generator.CGenerator()
-	writeLogFile( "j2llogs.logs" , getTimeStamp()+"\nCommand--Translate \n"+"\nParameters--\n File Name--"+file_name+"\n")
-	if ast is None:
-		print "Error present in code. Please verify you input file"
-	       	return
-	if len(ast.ext)==0:
-		print "Error present in code. Please verify you input file"
-	        return
-    	externalvarmap={}
-	functionvarmap={}
-	memberfunctionmap={}
-	axiomeMap={}
-	addition_array_map={}
-	function_vfact_map={}
-	pointer_map={}
-	array_map={}
-    	counter=0 
-          
-    	   	
-    	
-    	
-    	for e in ast.ext:
-    		pointer_list=[]
-    		if type(e) is c_ast.Decl:
-    			if type(e.type) is c_ast.FuncDecl:
-    				parametermap={}
-    				new_e,pointer_list,array_list=pointerHandlingParameter(e)
-    				if new_e is None:
-					function_decl=e
-				else:
-					function_decl=new_e
-				if function_decl.type.args is not None:
-					for param_decl in function_decl.type.args.params:
-						if param_decl.name is not None:
-				    			if type(param_decl.type) is c_ast.ArrayDecl:
-				    	    			degree=0
-				    	    			data_type,degree=getArrayDetails(param_decl,degree)
-								variable=variableclass(param_decl.name, data_type,None,degree,None)
-							else:
-								variable=variableclass(param_decl.name, param_decl.type.type.names[0],None,None,None)
-        						parametermap[param_decl.name]=variable
-
-				membermethod=membermethodclass(function_decl.name,function_decl.type.type.type.names[0],parametermap,None,None,0,0)
-				functionvarmap[membermethod.getMethodname()]=membermethod
-    			elif type(e.type) is c_ast.TypeDecl:
-            			var_type=None
-            			initial_value=None
-            			for child in e.children():
-                			if type(child[1].type) is c_ast.IdentifierType:
-                    				var_type=child[1].type.names[0]
-					else:
-                    				initial_value=child[1].value
-            			variable=variableclass(e.name, var_type,None,None,initial_value)
-            			externalvarmap[e.name]=variable
-    		else:
-    			if type(e) is c_ast.FuncDef:
-    				parametermap={}
-    				new_e,pointer_list,array_list=pointerHandlingParameter(e)
-    				if new_e is None:
-					function_decl=e
-				else:
-					function_decl=new_e
-    				function_body = e.body
-    				function_body=pointerHandlingDecl(function_body,pointer_list,array_list)
-    				localvarmap=getVariables(function_body)
-    				counter=counter+1
-    				if function_decl.type.args is not None:
-					for param_decl in function_decl.type.args.params:
-						if param_decl.name is not None:
-							if type(param_decl.type) is c_ast.ArrayDecl:
-								#print param_decl.show()
-								degree=0
-								data_type,degree=getArrayDetails(param_decl,degree)
-								variable=variableclass(param_decl.name, data_type,None,degree,None)
-							elif type(param_decl.type) is c_ast.PtrDecl:
-								stmt=pointerToArray(param_decl)
-								#print stmt.show()
-								if stmt is not None and type(stmt.type) is c_ast.ArrayDecl:
-									degree=0
-									data_type,degree=getArrayDetails(param_decl,degree)
-									variable=variableclass(stmt.name, data_type,None,degree,None)
-							
-									
-							else:				
-								variable=variableclass(param_decl.name, param_decl.type.type.names[0],None,None,None)
-			    				parametermap[param_decl.name]=variable
-    				if function_decl.name in functionvarmap.keys():
-					membermethod=membermethodclass(function_decl.name,function_decl.type.type.type.names[0],parametermap,localvarmap,function_body,0,counter)
-					functionvarmap[function_decl.name]=membermethod
-				else:
-					if function_decl.type.args is not None:
-						for param_decl in function_decl.type.args.params:
-							if param_decl.name is not None:
-								if type(param_decl.type) is c_ast.ArrayDecl:
-									degree=0
-									data_type,degree=getArrayDetails(param_decl,degree)
-									variable=variableclass(param_decl.name, data_type,None,degree,None)
-								elif type(param_decl.type) is c_ast.PtrDecl:
-									stmt=pointerToArray(param_decl)
-									if stmt is not None and type(stmt.type) is c_ast.ArrayDecl:
-										degree=0
-										data_type,degree=getArrayDetails(param_decl,degree)
-										variable=variableclass(stmt.name, data_type,None,degree,None)
-								
-								else:	
-									variable=variableclass(param_decl.name, param_decl.type.type.names[0],None,None,None)
-								parametermap[param_decl.name]=variable
-					membermethod=membermethodclass(function_decl.name,function_decl.type.type.type.names[0],parametermap,localvarmap,function_body,0,counter)
-					functionvarmap[membermethod.getMethodname()]=membermethod
-					pointer_map[membermethod.getMethodname()]=pointer_list
-					array_map[membermethod.getMethodname()]=array_list
-
-   	
-    	for medthod in functionvarmap.keys():
-    	
-                membermethod=functionvarmap[medthod]
-    		body=membermethod.getBody()
-    		
-    		if body is not None:                            
-                    statements=programTransformation(body)
-                    pointer_list=pointer_map[medthod]
-                    array_list=array_map[medthod]
-                    statements=pointerHandling(statements,pointer_list,array_list)
-                    body_comp = c_ast.Compound(block_items=statements)
-    		    membermethod.setBody(body_comp)
-    		    localvarmap=getVariables(body_comp)
-    		    membermethod.setLocalvar(localvarmap)
-    		else:
-		    membermethod.setBody(None)
-    		    membermethod.setLocalvar(None)
-                    
-    	#program in intermediate form
-    	programeIF=[]
-
-    	programeIF.append('-1')
-    			
-    	programeIF.append('prog')
-
-    	programe_array=[]
-
-    	variables_list_map={}
-
-    	for medthod in functionvarmap.keys():
-    		membermethod=functionvarmap[medthod]
-    		body=membermethod.getBody()
-    		if body is not None:
-    			new_variable={}
-    			update_statements=[]
-    			   		
-	    		body_comp=body
-	    		
-	    		statements=body.block_items
-	    		
-    			membermethod.setBody(body_comp)
-    			
-    			localvarmap=getVariables(body_comp)
-    			
-    			membermethod.setLocalvar(localvarmap)
-    			membermethod=functionvarmap[medthod]
-    			    			
-    			function=[]
-    			
-    			function.append('-1')
-    			
-    			function.append('fun')    			
-    			
-    			functionName=[]
-    			
-    			allvariable={}
-    			
-    			for x in membermethod.getInputvar():
-				allvariable[x]=membermethod.getInputvar()[x]
-			for x in membermethod.getLocalvar():
-        			allvariable[x]=membermethod.getLocalvar()[x]
-    			if validationOfInput(allvariable)==True:
-				print "Please Rename variable Name {S,Q,N,in,is} to other Name"
-          			return
-    
-    			program,variablesarray,fname,iputmap,opvariablesarray=translate2IntForm(membermethod.getMethodname(),membermethod.getreturnType(),membermethod.getBody(),membermethod.getInputvar())
-			
-		
-			functionName.append(fname)
-			
-			for var in iputmap:
-				functionName.append(str(var))
-				
-
-			function.append(functionName)
-			
-			function.append(program)
-
-			programe_array.append(function)
-		
-			variables_list_map[fname]=variablesarray
-			
-			addition_array=[]
-			
-			addition_array.append(iputmap)
-			
-			addition_array.append(allvariable)
-			
-			addition_array.append(opvariablesarray)
-			
-
-			
-			addition_array_map[fname]=addition_array
-			
-			memberfunctionmap[fname]=membermethod
-			
-			function_vfact_list=[]
-			function_vfact=[]
-			function_vfact.append(fname)
-			function_vfact.append(len(iputmap))
-			parameters_type=[]
-			parameters_type.append(membermethod.getreturnType())
-			for x in defineDetaillist:
-				#print x
-				function_vfact_list.append(x)
-			defineDetaillist=[]
-			for element in iputmap.keys():
-				variable=iputmap[element]
-				if variable is not None:
-					parameters_type.append(variable.getVariableType())
-			function_vfact.append(parameters_type)
-			function_vfact_list.append(function_vfact)
-			function_vfact_map[fname]=function_vfact_list	
-
-
-        programeIF.append(programe_array)
-        
-                      
-        f_map,o_map,a_map,cm_map,assert_map,assume_map=translate1(programeIF,variables_list_map,1)
-        
-        if type(f_map) is dict and type(o_map) is dict and type(a_map) is dict and type(cm_map) is dict:
-                for key in f_map.keys():
-        		f=f_map[key]
-        		o=o_map[key]
-        		a=a_map[key]
-        		cm=cm_map[key]
-        		assert_list=assert_map[key]
-        		assume_list=assume_map[key]
-        		addition_array=addition_array_map[key]
-        		vfacts,constraints=getVariFunDetails(f,o,a,addition_array[1],addition_array[2])
-        		
-
-
-        		var_map={}
-			eqset2stringvfact(f,var_map)
-			eqset2stringvfact(o,var_map)
-			for x in a: 
-        			wff2stringvfact(x,var_map)
-        		for x in assert_list:
-        			wff2stringvfact(x,var_map)
-        		for x in assume_list:
-        			wff2stringvfact(x,var_map)
-
-        		
-        		for element1 in  var_map.keys():
-        			flag=False
-        			for element2 in vfacts:
-        				if element2[0]==element1:
-        					flag=True
-				if flag==False:
-					vfact=[]
-					vfact.append(element1)
-					vfact.append(len(var_map[element1])-1)
-					vfact.append(var_map[element1])
-					vfacts.append(vfact)
-       		
-        		
-
-        		
-        		
-        		for element in function_vfact_map.keys():
-        		
-        			function_vfact_list=function_vfact_map[element]
-        			for x in function_vfact_list:
-        				vfacts.append(x)
-          		
-          		
-        		
-        		axiom=axiomclass(f,o,a,membermethod.getInputvar(), vfacts, constraints,cm,assert_list,assume_list)
-        		axiomeMap[key]=axiom
-                program=programclass(file_name, memberfunctionmap , externalvarmap, axiomeMap)
-                return program
-        else:
-        	return None
 
 			    
 
 
-
+def constructLineStmtmap(program):
+    lines_map={}
+    count=0
+    lines_stmt=program.split('\n')
+    for x in lines_stmt:
+        count=count+1
+        lines_map[x+'@'+str(count)]= x
+    return lines_map
 
 
 
@@ -14991,7 +14676,8 @@ def prove_auto(file_name,property=None):
 	if not(os.path.exists(file_name)): 
         	print "File not exits"
 		return
-
+        if os.path.exists(currentdirectory+'/errorWitness.graphml'):
+            os.remove(currentdirectory+'/errorWitness.graphml')
 	start_time=current_milli_time()
 	content=None
         witness_path=None
@@ -15011,29 +14697,40 @@ def prove_auto(file_name,property=None):
         global fun_call_map
         global current_fun_call
         global fun_substitution_map
+        global line_no_stmt_map
+        global count_ast_line_no
+        global main_count_ast_line_no
+        global main_line_no_stmt_ast_map
         struct_map={}
         fail_count=0
         error_count=0
         assume_count=0
         assert_count=0
+        count_ast_line_no=0
+        main_count_ast_line_no=0
         map___VERIFIER_nondet={}
         new_variable_array={}
         counter_variableMap={}
         counter_variableMap_Conf={}
         fun_call_map={}
         fun_substitution_map={}
+        line_no_stmt_map={}
         function_vfacts=[]
         program_analysis=''
         program_analysis2=''
+        program_analysis3=''
         program_analysis_decl=''
         program_analysis_var_decl=''
         current_fun_call=None
         struct_list=None
         type_struct_list=None
+        line_no_stmt_map=None
+        main_line_no_stmt_ast_map={}
         
 	try:
 		fd = open(file_name)
 		text = "".join(fd.readlines())
+                line_no_stmt_map=constructLineStmtmap(text)
                 defineMap={}
                 content,defineMap=preProcessorHandling(text)
 		text=replaceAddOperator(text)
@@ -15336,6 +15033,7 @@ def prove_auto(file_name,property=None):
                         localvarmap=getVariables(body_comp)
                         statements,localvarmap=addAllExtVariables(statements,externalvarmap,localvarmap)
                         statements = translateStruct(statements,localvarmap,struct_map)
+                        line_count_ast_Block(pa_statements)
                         #statements=pointerHandling(statements,pointer_list,array_list)
                         body_comp = c_ast.Compound(block_items=statements)
                         membermethod.setBody(body_comp)
@@ -15484,6 +15182,7 @@ def prove_auto(file_name,property=None):
 				#print "Please Rename variable Name {S,Q,N,in,is} to other Name"
           			return
     			
+
     			try:
                             
                             program,variablesarray,fname,iputmap,opvariablesarray,module_analysis,module_analysis2=translate2IntForm(membermethod.getMethodname(),membermethod.getreturnType(),membermethod.getBody(),membermethod.getInputvar(),membermethod.getTempoary(),membermethod.getAnalysis_module(),struct_map)
@@ -15492,7 +15191,7 @@ def prove_auto(file_name,property=None):
                             #print 'Error(error occurred during translation intermediate format)'
                             print 'Unkown'
                             writeLogFile( "j2llogs.logs" ,str(e))
-                            print str(e)
+                        #    print str(e)
                             return
 		
 
@@ -15567,7 +15266,9 @@ def prove_auto(file_name,property=None):
                             #print '^^^^^^^^^^^^^^^^^^^'
                             if 'main' not in program_decl:
                                 program_analysis_decl+=programPrint(membermethod.getFun_decl())+';\n'
-                            program_analysis2=program_decl+programPrint(module_analysis2)+program_analysis
+                            module_analysis_t1,module_analysis_t2=module_analysis2
+                            program_analysis2=program_decl+programPrint(module_analysis_t1)+program_analysis2
+                            program_analysis3=program_decl+programPrint(module_analysis_t2)+program_analysis3
                             program_analysis=program_decl+programPrint(module_analysis)+program_analysis
                             
         
@@ -15581,6 +15282,7 @@ def prove_auto(file_name,property=None):
         #print variables_list_map
         #print '--------------------------------'
         #return
+        
         try:
             f_map,o_map,a_map,cm_map,assert_map,assume_map,assert_key_map=translate1(programeIF,variables_list_map,1)
             
@@ -15695,6 +15397,7 @@ def prove_auto(file_name,property=None):
                 #print "Translation Time--"
 		#print end_time-start_time
                 #AssetionAnalysis2(program_analysis2,program_analysis_decl)
+                #
                 #return
                 results=AssetionAnalysis(program_analysis,program_analysis_decl)
                 #print '$$$$$$$$$$$$$$$$$'
@@ -15733,6 +15436,12 @@ def prove_auto(file_name,property=None):
                                     #violation_status=violationWitness(filename)
                                     #if violation_status is not None and 'False' in violation_status:
                                     print 'VIAP_STANDARD_OUTPUT_False'
+                                    
+                                    result=AssetionAnalysis3(program_analysis3,program_analysis_decl,file_name,property)
+                                    if result is not None:
+                                            writtingFile( "errorWitness.graphml" , result )
+                                            writeLogFile( "j2llogs.logs" , "\nViolation \n"+str(result)+"\n" )
+                                    
                                     test_int_mid=None
                                     test_uint_mid=None
                                     test_char_mid=None
@@ -15815,6 +15524,12 @@ def prove_auto(file_name,property=None):
                                     int_mid_count=0
                                     uint_mid_count=0
                                     char_mid_count=0
+                                    
+                                    result=AssetionAnalysis3(program_analysis3,program_analysis_decl,file_name,property)
+                                    if result is not None:
+                                            #print "Error Witness Generated"
+                                            writtingFile( "errorWitness.graphml" , result )
+                                            writeLogFile( "j2llogs.logs" , "\nViolation \n"+str(result)+"\n" )
                                     #print results[result]
                                     return
                                     for term in results[result]:
@@ -16851,8 +16566,65 @@ def AssetionAnalysis2(program_analysis,program_analysis_decl):
     program_analysis = program_analysis.replace('_Bool','int')
     program_analysis="#include <time.h>\n#include <stdlib.h>\n#include <stdio.h>\nchar _count_char='\\0';\nunsigned int _count=0;\nint _count_int=0;\ndouble _count_double=0.0;\nfloat _count_float=0.0f;\nint __VERIFIER_nondet_bool(int callcount)\n{\nint value;\n_count++;\nsrand(_count+(unsigned int)time(NULL));\nsrand(rand());\nvalue=rand()%2;\nprintf(\"__VERIFIER_nondet_bool:%d:%d\\n\",callcount,value);\nreturn value;\n}\nchar __VERIFIER_nondet_char(int callcount)\n{\nchar value;\n_count_char++;\nsrand(_count_int+(char)time(NULL));\nsrand(rand());\nvalue=rand()%1000;\nprintf(\"__VERIFIER_nondet_char:%d:%c\\n\",callcount,value);\nreturn value;\n}\nint __VERIFIER_nondet_int(int callcount)\n{\nint value;\n _count_int++;\nsrand(_count_int+(int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nprintf(\"__VERIFIER_nondet_int:%d:%d\\n\",callcount,value);\nreturn value;\n}\n"+"\nunsigned int __VERIFIER_nondet_uint(int callcount)\n{\nunsigned int value;\n _count++;\nsrand(_count+(unsigned int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nprintf(\"__VERIFIER_nondet_uint:%d:%d\\n\",callcount,value);\nreturn value;\n}\n"+"\ndouble __VERIFIER_nondet_double(int callcount)\n{\ndouble value;\n _count++;\nsrand(_count_double+(double)time(NULL));\n srand(rand());\n value=rand()%1000;\nprintf(\"%d:%lf\\n\",callcount,value);\nreturn value;\n}\n"+"\nfloat __VERIFIER_nondet_float(int callcount)\n{\nfloat value;\n _count++;\nsrand(_count_float+(float)time(NULL));\n srand(rand());\n \n value=rand()%1000;\nprintf(\"__VERIFIER_nondet_float:%d:%f\\n\",callcount,value);\nreturn value;\n}\n"+program_analysis_decl+program_analysis
     writtingFile( "input_program1.c" , program_analysis )
+    try :
+        subprocess.call(["gcc", "-o",currentdirectory+"/input_program1",currentdirectory+"/input_program1.c"])
+        x=0
+        for x in range(0,1):
+            #proc = subprocess.Popen('./input_program', stdout=subprocess.PIPE,shell=True)
+            #output = proc.stdout.read()
+            #output, err = proc.communicate()
+            #print '##################---------------'
+            start_time=current_milli_time()
+            command = commandclass.Command(currentdirectory+"/input_program1")
+            output = command.run(timeout=60)
+            end_time=current_milli_time()
+            if end_time-start_time >300:
+                return None
+            status=output 
+            if status is not None and 'Termination Failed' not in status:
+                outputs_list = status.split('\n')
+                out_results=processOutput1(outputs_list)
+                if out_results is not None and len(out_results)>0:
+                    print out_results
+                      
+    except OSError  as err:
+        print 'Error Occured'
 
 
+
+def AssetionAnalysis3(program_analysis,program_analysis_decl,file_name,property):
+    map_asserts={}
+
+    program_analysis = program_analysis.replace('_Bool','int')
+    program_analysis="#include <time.h>\n#include <stdlib.h>\n#include <stdio.h>\nchar _count_char='\\0';\nunsigned int _count=0;\nint _count_int=0;\ndouble _count_double=0.0;\nfloat _count_float=0.0f;\nint __VERIFIER_nondet_bool()\n{\nint value;\n_count++;\nsrand(_count+(unsigned int)time(NULL));\nsrand(rand());\nvalue=rand()%2;\nreturn value;\n}\nchar __VERIFIER_nondet_char()\n{\nchar value;\n_count_char++;\nsrand(_count_int+(char)time(NULL));\nsrand(rand());\nvalue=rand()%1000;\nreturn value;\n}\nint __VERIFIER_nondet_int()\n{\nint value;\n _count_int++;\nsrand(_count_int+(int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nvalue=2;\nreturn value;\n}\n"+"\nunsigned int __VERIFIER_nondet_uint()\n{\nunsigned int value;\n _count++;\nsrand(_count+(unsigned int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nreturn value;\n}\n"+"\ndouble __VERIFIER_nondet_double()\n{\ndouble value;\n _count++;\nsrand(_count_double+(double)time(NULL));\n srand(rand());\n value=rand()%1000;\nreturn value;\n}\n"+"\nfloat __VERIFIER_nondet_float()\n{\nfloat value;\n _count++;\nsrand(_count_float+(float)time(NULL));\n srand(rand());\n \n value=rand()%1000;\nreturn value;\n}\n"+program_analysis_decl+program_analysis
+    #program_analysis="#include <time.h>\n#include <stdlib.h>\n#include <stdio.h>\nchar _count_char='\\0';\nunsigned int _count=0;\nint _count_int=0;\ndouble _count_double=0.0;\nfloat _count_float=0.0f;\nint __VERIFIER_nondet_bool()\n{\nint value;\n_count++;\nsrand(_count+(unsigned int)time(NULL));\nsrand(rand());\nvalue=rand()%2;\nreturn value;\n}\nchar __VERIFIER_nondet_char()\n{\nchar value;\n_count_char++;\nsrand(_count_int+(char)time(NULL));\nsrand(rand());\nvalue=rand()%1000;\nreturn value;\n}\nint __VERIFIER_nondet_int()\n{\nint value;\n _count_int++;\nsrand(_count_int+(int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nreturn value;\n}\n"+"\nunsigned int __VERIFIER_nondet_uint()\n{\nunsigned int value;\n _count++;\nsrand(_count+(unsigned int)time(NULL));\n srand(rand());\nvalue=rand()%1000;\nreturn value;\n}\n"+"\ndouble __VERIFIER_nondet_double()\n{\ndouble value;\n _count++;\nsrand(_count_double+(double)time(NULL));\n srand(rand());\n value=rand()%1000;\nreturn value;\n}\n"+"\nfloat __VERIFIER_nondet_float()\n{\nfloat value;\n _count++;\nsrand(_count_float+(float)time(NULL));\n srand(rand());\n \n value=rand()%1000;\nreturn value;\n}\n"+program_analysis_decl+program_analysis
+    writtingFile( "input_program2.c" , program_analysis )
+    try :
+        subprocess.call(["gcc", "-o",currentdirectory+"/input_program2",currentdirectory+"/input_program2.c"])
+        x=0
+        for x in range(0,1):
+            #proc = subprocess.Popen('./input_program', stdout=subprocess.PIPE,shell=True)
+            #output = proc.stdout.read()
+            #output, err = proc.communicate()
+            #print '##################---------------'
+            start_time=current_milli_time()
+            command = commandclass.Command(currentdirectory+"/input_program2")
+            output = command.run(timeout=60)
+            end_time=current_milli_time()
+            if end_time-start_time >300:
+                return None
+            status=output
+            #print '-----------------'
+            #print status
+            #print '-----------------'
+            if status is not None and 'Termination Failed' not in status:
+                outputs_list = status.split('\n')
+                results=processOutput2(outputs_list,file_name,property)
+                if results is not None:
+                    return results
+    except OSError  as err:
+        print 'Error Occured'
+        return status
 
  
 def extractFileName(filename):
@@ -16863,7 +16635,1389 @@ def extractFileName(filename):
 
 
 
+def processOutput1(outputs_list):
+    value__VERIFIER_nondet_list=[]
+    if len(outputs_list)>0:
+        for output_list in outputs_list:
+            if ':' in output_list and output_list.strip()!='':
+                if '_PROVE' not in output_list and '_FAILED' not in output_list:
+                    value__VERIFIER_nondet_list.append(output_list)
+                else:
+                    if '_PROVE' in output_list:
+                        outputs_values = output_list.split(':')
+                        if outputs_values[1]=='1':
+                            return process__VERIFIER_nondet_list(value__VERIFIER_nondet_list)
+                    elif '_FAILED' in output_list:
+                        outputs_values = output_list.split(':')
+                        if outputs_values[1]=='1':
+                            return process__VERIFIER_nondet_list(value__VERIFIER_nondet_list)
 
+
+
+def processOutput2(outputs_list,filename,property):
+    global line_no_stmt_map
+    global back_line_no_stmt_map
+    CountNode=0
+    file_flag=True
+    f_call_map={}
+    e_current_assumption=None
+    current_assumption=None
+    current_assignment=None
+    current_functioncall=None
+    while_loop=None
+    if property is None:
+        property="CHECK( init(main()), LTL(G ! call(__VERIFIER_error())) )"
+    if_cond_list=[]
+    hashcode=sha1(filename)
+    count=0
+    
+    
+    violation_witness1="<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n"+"<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n"+"<key attr.name=\"originFileName\" attr.type=\"string\" for=\"edge\" id=\"originfile\">\n"+"<default>"+filename+"</default>\n"+"</key>\n"+"<key attr.name=\"invariant\" attr.type=\"string\" for=\"node\" id=\"invariant\"/>\n"+"<key attr.name=\"invariant.scope\" attr.type=\"string\" for=\"node\" id=\"invariant.scope\"/>\n"+"<key attr.name=\"namedValue\" attr.type=\"string\" for=\"node\" id=\"named\"/>\n"+"<key attr.name=\"nodeType\" attr.type=\"string\" for=\"node\" id=\"nodetype\">\n"+"<default>path</default>\n"+"</key>"+"<key attr.name=\"isFrontierNode\" attr.type=\"boolean\" for=\"node\" id=\"frontier\">"+"<default>false</default>"+"</key>\n"+"<key attr.name=\"isViolationNode\" attr.type=\"boolean\" for=\"node\" id=\"violation\">\n"+"<default>false</default>\n"+"</key>\n"+"<key attr.name=\"isEntryNode\" attr.type=\"boolean\" for=\"node\" id=\"entry\">\n"+"<default>false</default>\n"+"</key>\n"+"<key attr.name=\"isSinkNode\" attr.type=\"boolean\" for=\"node\" id=\"sink\">\n"+"<default>false</default>"+"</key>"+"<key attr.name=\"isLoopHead\" attr.type=\"boolean\" for=\"node\" id=\"loopHead\">\n"+"<default>false</default>"+"</key>"+"<key attr.name=\"violatedProperty\" attr.type=\"string\" for=\"node\" id=\"violatedProperty\"/>\n"+"<key attr.name=\"threadId\" attr.type=\"string\" for=\"edge\" id=\"threadId\"/>\n"+"<key attr.name=\"sourcecodeLanguage\" attr.type=\"string\" for=\"graph\" id=\"sourcecodelang\"/>\n"+"<key attr.name=\"programFile\" attr.type=\"string\" for=\"graph\" id=\"programfile\"/>\n"+"<key attr.name=\"programHash\" attr.type=\"string\" for=\"graph\" id=\"programhash\"/>\n"+"<key attr.name=\"specification\" attr.type=\"string\" for=\"graph\" id=\"specification\"/>\n"+"<key attr.name=\"memoryModel\" attr.type=\"string\" for=\"graph\" id=\"memorymodel\"/>\n"+"<key attr.name=\"architecture\" attr.type=\"string\" for=\"graph\" id=\"architecture\"/>\n"+"<key attr.name=\"producer\" attr.type=\"string\" for=\"graph\" id=\"producer\"/>\n"+"<key attr.name=\"sourcecode\" attr.type=\"string\" for=\"edge\" id=\"sourcecode\"/>\n"+"<key attr.name=\"startline\" attr.type=\"int\" for=\"edge\" id=\"startline\"/>\n"+"<key attr.name=\"endline\" attr.type=\"int\" for=\"edge\" id=\"endline\"/>\n"+"<key attr.name=\"lineColSet\" attr.type=\"string\" for=\"edge\" id=\"lineCols\"/>\n"+"<key attr.name=\"control\" attr.type=\"string\" for=\"edge\" id=\"control\"/>\n"+"<key attr.name=\"assumption\" attr.type=\"string\" for=\"edge\" id=\"assumption\"/>\n"+"<key attr.name=\"assumption.scope\" attr.type=\"string\" for=\"edge\" id=\"assumption.scope\"/>\n"+"<key attr.name=\"enterFunction\" attr.type=\"string\" for=\"edge\" id=\"enterFunction\"/>\n"+"<key attr.name=\"returnFromFunction\" attr.type=\"string\" for=\"edge\" id=\"returnFrom\"/>"+"<key attr.name=\"predecessor\" attr.type=\"string\" for=\"edge\" id=\"predecessor\"/>\n"+"<key attr.name=\"successor\" attr.type=\"string\" for=\"edge\" id=\"successor\"/>\n"+"<key attr.name=\"witness-type\" attr.type=\"string\" for=\"graph\" id=\"witness-type\"/>\n"+"<graph edgedefault=\"directed\">\n"+"<data key=\"witness-type\">violation_witness</data>\n"+"<data key=\"sourcecodelang\">C</data>"+"<data key=\"producer\">VIAP</data>"+"<data key=\"specification\">"+property+"</data>"+"<data key=\"programfile\">"+filename+"</data>\n"+"<data key=\"programhash\">"+hashcode+"</data>\n"+"<data key=\"memorymodel\">precise</data>\n"+"<data key=\"architecture\">32bit</data>\n"+"\n<node id=\"sink\"><data key=\"sink\">true</data></node>\n"
+    #violation_witness1="<?xml version=\"1.0\" encoding=\"UTF-8\"?>"+"\n"+"<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\""+"\n"+"xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"" +"\n"+"xsi:schemaLocation=\"http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd\">"+"\n"+"<key id=\"programfile\" attr.name=\"programfile\" for=\"graph\"/>"+"\n"+"<key id=\"programhash\" attr.name=\"programhash\" for=\"graph\"/>"+"\n"+"<key id=\"sourcecodelang\" attr.name=\"sourcecodelang\" for=\"graph\"/>"+"\n"+"<key id=\"producer\" attr.name=\"producer\" for=\"graph\"/>"+"\n"+"<key id=\"specification\" attr.name=\"specification\" for=\"graph\"/>"+"\n"+"<key id=\"creationtime\" attr.name=\"creationtime\" for=\"graph\"/>"+"\n"+"<key id=\"witness-type\" attr.name=\"witness-type\" for=\"graph\"/>"+"\n"+"<key id=\"architecture\" attr.name=\"architecture\" for=\"graph\"/>"+"\n"+"<key id=\"entry\" attr.name=\"entry\" for=\"node\">"+"\n"+"<default>false</default>"+"\n"+"</key>"+"\n"+"<key id=\"nodetype\" attr.name=\"nodetype\" for=\"node\">"+"\n"+"<default>path</default>"+"\n"+"</key>"+"\n"+"<key id=\"violation\" attr.name=\"violation\" for=\"node\">"+"\n"+"<default>false</default>"+"\n"+"</key>"+"\n"+"<key id=\"invariant\" attr.name=\"invariant\" for=\"node\">"+"\n"+"<default>true</default>"+"\n"+"</key>"+"\n"+"<key id=\"endline\" attr.name=\"endline\" for=\"edge\"/>"+"\n"+"<key id=\"enterFunction\" attr.name=\"enterFunction\" for=\"edge\"/>"+"\n"+"<key id=\"startline\" attr.name=\"startline\" for=\"edge\"/>"+"\n"+"<key id=\"returnFrom\" attr.name=\"returnFrom\" for=\"edge\"/>"+"\n"+"<key id=\"assumption\" attr.name=\"assumption\" for=\"edge\"/>"+"\n"+"<key id=\"tokens\" attr.name=\"tokens\" for=\"edge\"/>"+"\n"+"<key id=\"control\" attr.name=\"control\" for=\"edge\"/>"+"\n"+"<key id=\"originfile\" attr.name=\"originfile\" for=\"edge\">"+"\n"+"<default>"+filename+"</default>"+"\n"+"</key>"+"\n"+"<key id=\"sourcecode\" attr.name=\"sourcecode\" for=\"edge\"/>"+"\n"+"<graph edgedefault=\"directed\">"+"\n"+"<data key=\"programfile\">"+filename+"</data>"+"\n"+"<data key=\"programhash\">"+hashcode+"</data>"+"\n"+"<data key=\"sourcecodelang\">C</data>"+"\n"+"<data key=\"producer\">VIAP</data>"+"\n"+"<data key=\"specification\">"+property+"</data>"+"\n"+"<data key=\"creationtime\">"+str(datetime.datetime.now().strftime("%y-%m-%dT%H:%MZ"))+"</data>"+"\n"+"<data key=\"witness-type\">violation_witness</data>"+"\n"+"<data key=\"architecture\">64bit</data>"+"\n"+"<node id=\"N0\">"+"\n"+"<data key=\"entry\">true</data>"+"\n"+"</node>"
+    violation_witness2=''
+    if len(outputs_list)>0:
+        for output_list in outputs_list:
+            if 'Assignment:' in output_list:
+                    if current_assignment is not None:
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        terms=current_assignment.split(':')
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        if 'for' in terms[-2].strip():
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                        else:
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1
+                        
+                        
+                    for x in if_cond_list:
+                        terms=x.split(':')
+                        if int(terms[-1])==0:
+                            
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            
+                        else:
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            break
+                    if_cond_list=[]
+                    
+                    
+                    current_assignment=output_list
+            elif 'FunctionCall:' in output_list:
+                    if current_assignment is not None:
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        terms=current_assignment.split(':')
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        if 'for' in terms[-2].strip():
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                        else:
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1
+                        current_assignment= None
+                        
+                    for x in if_cond_list:
+                        terms=x.split(':')
+                        if int(terms[-1])==0:
+                            
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            
+                        else:
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            break
+                    if_cond_list=[]
+                    if current_functioncall is not None and current_functioncall==output_list:
+                        terms=output_list.split(':')
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1
+                        
+                    
+                    
+                    
+                    terms=output_list.split(':')
+                    if CountNode==0:
+                        violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                        violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                    else:
+                        violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+
+                    violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    if terms[-4].strip()=='#':
+                        violation_witness2+="<data key=\"sourcecode\">return "+terms[-2].strip()+";</data>\n"
+                    else:
+                        violation_witness2+="<data key=\"sourcecode\">"+terms[-4].strip()+";</data>\n"
+                        current_functioncall = output_list
+                        
+                    violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"enterFunction\">"+terms[-3]+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    CountNode=CountNode+1
+                    
+            elif 'RecahCallPoint:' in output_list:
+                    if current_assignment is not None:
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        terms=current_assignment.split(':')
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        if 'for' in terms[-2].strip():
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                        else:
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1
+                        current_assignment= None
+                        
+                    for x in if_cond_list:
+                        terms=x.split(':')
+                        if int(terms[-1])==0:
+                            
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            
+                        else:
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            break
+                    if_cond_list=[]
+                    terms=output_list.split(':')
+                    if CountNode==0:
+                        violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                        violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                    else:
+                        violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+
+                    violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    CountNode=CountNode+1
+
+                    
+            elif 'Return:' in output_list:
+                    if current_assignment is not None:
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        terms=current_assignment.split(':')
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        if 'for' in terms[-2].strip():
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                        else:
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1
+                        current_assignment= None
+                        
+                    for x in if_cond_list:
+                        terms=x.split(':')
+                        if int(terms[-1])==0:
+                            
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            
+                        else:
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            break
+                    if_cond_list=[]
+                    terms=output_list.split(':')
+                    if len(terms)==5:
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">return "+terms[-4].strip()+";</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"returnFrom\">"+terms[-3]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1
+                    else:
+                        
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1
+                        
+                        
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">return "+terms[-4].strip()+";</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"returnFrom\">"+terms[-3]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1
+
+                
+            elif 'IfCondition1' in output_list or 'Else-IfCondition1' in output_list:
+                    if current_assignment is not None:
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        terms=current_assignment.split(':')
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        
+                        if 'for' in terms[-2].strip():
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                        else:
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                            
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1                
+                        current_assignment= None
+            
+                    if_cond_list.append(output_list)
+            elif 'IfCondition2' in output_list:
+                    if current_assignment is not None:
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        terms=current_assignment.split(':')
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        
+                        if 'for' in terms[-2].strip():
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                        else:
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                        
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountNode=CountNode+1                
+                        current_assignment= None
+                        
+                    for x in if_cond_list:
+                        terms=x.split(':')
+                        if int(terms[-1])==0:
+                            
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            
+                        else:
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            else:
+                                violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            violation_witness2+="</edge>\n"
+                            
+                            CountNode=CountNode+1
+                            break
+                            
+                    if_cond_list=[]
+                        
+            elif 'WhileCondition' in output_list:
+                    terms=output_list.split(':')
+                    if int(terms[-1])==1:
+                            
+                        if current_assignment is not None:
+                            
+                            if CountNode==0:
+                                violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                if while_loop is not None:
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"><data key=\"loopHead\">true</data></node>\n"
+                                else:
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"><data key=\"loopHead\">true</data></node>\n"
+                            else:
+                                if while_loop is not None:
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"><data key=\"loopHead\">true</data></node>\n"
+                                else:
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"><data key=\"loopHead\">true</data></node>\n"
+                            
+                            terms=current_assignment.split(':')
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            if 'for' in terms[-2].strip():
+                                violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                            else:
+                                violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="</edge>\n"
+                    
+
+                            CountNode=CountNode+1
+                            
+                            
+                        for x in if_cond_list:
+                            terms=x.split(':')
+                            if int(terms[-1])==0:
+                            
+                                if CountNode==0:
+                                    violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                                else:
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                                violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                                violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                                violation_witness2+="</edge>\n"
+                            
+                                violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                                violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"control\">condition-true</data>\n"
+        
+                                violation_witness2+="</edge>\n"
+                            
+                                CountNode=CountNode+1
+                            
+                            else:
+                                if CountNode==0:
+                                    violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                                else:
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                                violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                                violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                                violation_witness2+="</edge>\n"
+                            
+                                violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                                violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                                violation_witness2+="</edge>\n"
+                            
+                                CountNode=CountNode+1
+                                break
+                        if_cond_list=[]
+                            
+                            
+                            
+                        
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                        while_loop='Current'
+                        terms=output_list.split(':')
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                        violation_witness2+= "</edge>\n"
+                        
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink"+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                        
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                        violation_witness2+= "</edge>\n"
+                        
+                        CountNode=CountNode+1
+                        
+                    else:
+                        
+                        if while_loop is not None:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"><data key=\"loopHead\">true</data></node>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                        
+                        if current_assignment is not None:
+                            
+                            
+                            terms=current_assignment.split(':')
+                            violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            if 'for' in terms[-2].strip():
+                                violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                            else:
+                                violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="</edge>\n"
+                    
+                            CountNode=CountNode+1
+                            
+                            
+                            
+                        for x in if_cond_list:
+                            terms=x.split(':')
+                            if int(terms[-1])==0:
+                            
+                                if CountNode==0:
+                                    violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                                else:
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                                violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                                violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                                violation_witness2+="</edge>\n"
+                            
+                                violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                                violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                                violation_witness2+="</edge>\n"
+                            
+                                CountNode=CountNode+1
+                            
+                            else:
+                                if CountNode==0:
+                                    violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                                else:
+                                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                                violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                                violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                                violation_witness2+="</edge>\n"
+                            
+                                violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                                violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                                violation_witness2+="</edge>\n"
+                            
+                                CountNode=CountNode+1
+                                break
+                        if_cond_list=[]
+                        
+                        while_loop=None
+                        
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        
+                        terms=output_list.split(':')
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                        violation_witness2+= "</edge>\n"
+                        
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink"+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                        violation_witness2+= "</edge>\n"
+                        
+                        CountNode=CountNode+1
+                    current_assignment= None
+        
+            elif '_FAILED' in output_list:
+
+                if current_assignment is not None:
+                    terms=current_assignment.split(':')
+                    
+                    if CountNode==0:
+                        violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                        violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+
+                    else:
+                        violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                    
+                    violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    if 'for' in terms[-2].strip():
+                        violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                    else:
+                        violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+
+                    violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    
+                    
+                    CountNode=CountNode+1
+                    
+                for x in if_cond_list:
+                    terms=x.split(':')
+                    if int(terms[-1])==0:
+                            
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                        violation_witness2+="</edge>\n"
+                            
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                        violation_witness2+="</edge>\n"
+                            
+                        CountNode=CountNode+1
+                            
+                    else:
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                        violation_witness2+="</edge>\n"
+                            
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                        violation_witness2+="</edge>\n"
+                            
+                        CountNode=CountNode+1
+                        break
+                if_cond_list=[]
+                            
+                terms=output_list.split(':')
+                if terms[-1]=='1':
+                    line_no,stmt = getLineNumber("__VERIFIER_error()",None)
+                    
+                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\">"+"\n<data key=\"violation\">true</data>\n<data key=\"violatedProperty\">__VERIFIER_error(); called in line "+str(line_no)+"</data>\n"+"</node>\n"
+                    
+                    violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    violation_witness2+="<data key=\"sourcecode\">__VERIFIER_error();</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+str(line_no)+"</data>\n"
+                    violation_witness2+="<data key=\"endline\">"+str(line_no)+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    return violation_witness1+'\n'+violation_witness2+"\n</graph>\n</graphml>\n"
+            elif '__VERIFIER_assert' in output_list:
+                        
+                if current_assignment is not None:
+                    terms=current_assignment.split(':')
+                    
+                    if CountNode==0:
+                        violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                        violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+
+                    else:
+                        violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                    
+                    
+                    violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    if 'for' in terms[-2].strip():
+                        violation_witness2+="<data key=\"sourcecode\">"+terms[-3].strip()+"</data>\n"
+                    else:
+                        violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    
+                    CountNode=CountNode+1
+                    
+                    
+                for x in if_cond_list:
+                    terms=x.split(':')
+                    if int(terms[-1])==0:
+                            
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                        violation_witness2+="</edge>\n"
+                            
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                        violation_witness2+="</edge>\n"
+                            
+                        CountNode=CountNode+1
+                            
+                    else:
+                        if CountNode==0:
+                            violation_witness2+="<node id=\"N0\"><data key=\"entry\">true</data></node>\n"
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                        else:
+                            violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                            
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                        violation_witness2+="</edge>\n"
+                            
+                        violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                        violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                        violation_witness2+="</edge>\n"
+                            
+                        CountNode=CountNode+1
+                        break
+                if_cond_list=[]
+                    
+                            
+                terms=output_list.split(':')
+                if terms[-1]=='0':
+                    line_no,stmt = getLineNumber(terms[-2],None)
+                    line_no1,stmt1 = getLineNumber('if (!(cond)) {',None)
+                    line_no2,stmt2 = getLineNumber('__VERIFIER_error();',None)
+                    
+                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                    
+                    violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    violation_witness2+="<data key=\"sourcecode\">"+terms[-2].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+str(line_no)+"</data>\n"
+                    violation_witness2+="<data key=\"endline\">"+str(line_no)+"</data>\n"
+                    violation_witness2+="<data key=\"enterFunction\">__VERIFIER_assert</data>\n"
+                    violation_witness2+="</edge>\n"
+                    CountNode=CountNode+1
+                    
+
+                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\"/>\n"
+                    
+                    violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    violation_witness2+="<data key=\"sourcecode\">[cond==0]</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+str(line_no1)+"</data>\n"
+                    violation_witness2+="<data key=\"endline\">"+str(line_no1)+"</data>\n"
+                    violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                    violation_witness2+="</edge>\n"
+                    violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"sink\">\n"
+                    violation_witness2+="<data key=\"sourcecode\">[!(cond==0)]</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+str(line_no1)+"</data>\n"
+                    violation_witness2+="<data key=\"endline\">"+str(line_no1)+"</data>\n"
+                    violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                    violation_witness2+="</edge>\n"
+                    CountNode=CountNode+1
+                    
+
+                    violation_witness2+="<node id=\"N"+str(CountNode+1)+"\">"+"\n<data key=\"violation\">true</data>\n<data key=\"violatedProperty\">__VERIFIER_error(); called in line "+str(line_no2)+"</data>\n"+"</node>\n"
+                    
+                    violation_witness2+="<edge source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    violation_witness2+="<data key=\"sourcecode\">__VERIFIER_error();</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+str(line_no2)+"</data>\n"
+                    violation_witness2+="<data key=\"endline\">"+str(line_no2)+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    return violation_witness1+'\n'+violation_witness2+"\n</graph>\n</graphml>\n"
+        
+        return None            
+
+
+
+
+
+
+def processOutput4(outputs_list,filename,property):
+    global line_no_stmt_map
+    global back_line_no_stmt_map
+    CountEdge=0
+    CountNode=0
+    file_flag=True
+    f_call_map={}
+    e_current_assumption=None
+    current_assumption=None
+    current_assignment=None
+    if property is None:
+        property="CHECK( init(main()), LTL(G ! call(__VERIFIER_error())) )"
+    if_cond_list=[]
+    hashcode=sha1(filename)
+    violation_witness1="<?xml version=\"1.0\" encoding=\"UTF-8\"?>"+"\n"+"<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\""+"\n"+"xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"" +"\n"+"xsi:schemaLocation=\"http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd\">"+"\n"+"<key id=\"programfile\" attr.name=\"programfile\" for=\"graph\"/>"+"\n"+"<key id=\"programhash\" attr.name=\"programhash\" for=\"graph\"/>"+"\n"+"<key id=\"sourcecodelang\" attr.name=\"sourcecodelang\" for=\"graph\"/>"+"\n"+"<key id=\"producer\" attr.name=\"producer\" for=\"graph\"/>"+"\n"+"<key id=\"specification\" attr.name=\"specification\" for=\"graph\"/>"+"\n"+"<key id=\"creationtime\" attr.name=\"creationtime\" for=\"graph\"/>"+"\n"+"<key id=\"witness-type\" attr.name=\"witness-type\" for=\"graph\"/>"+"\n"+"<key id=\"architecture\" attr.name=\"architecture\" for=\"graph\"/>"+"\n"+"<key id=\"entry\" attr.name=\"entry\" for=\"node\">"+"\n"+"<default>false</default>"+"\n"+"</key>"+"\n"+"<key id=\"nodetype\" attr.name=\"nodetype\" for=\"node\">"+"\n"+"<default>path</default>"+"\n"+"</key>"+"\n"+"<key id=\"violation\" attr.name=\"violation\" for=\"node\">"+"\n"+"<default>false</default>"+"\n"+"</key>"+"\n"+"<key id=\"invariant\" attr.name=\"invariant\" for=\"node\">"+"\n"+"<default>true</default>"+"\n"+"</key>"+"\n"+"<key id=\"endline\" attr.name=\"endline\" for=\"edge\"/>"+"\n"+"<key id=\"enterFunction\" attr.name=\"enterFunction\" for=\"edge\"/>"+"\n"+"<key id=\"startline\" attr.name=\"startline\" for=\"edge\"/>"+"\n"+"<key id=\"returnFrom\" attr.name=\"returnFrom\" for=\"edge\"/>"+"\n"+"<key id=\"assumption\" attr.name=\"assumption\" for=\"edge\"/>"+"\n"+"<key id=\"tokens\" attr.name=\"tokens\" for=\"edge\"/>"+"\n"+"<key id=\"control\" attr.name=\"control\" for=\"edge\"/>"+"\n"+"<key id=\"originfile\" attr.name=\"originfile\" for=\"edge\">"+"\n"+"<default>"+filename+"</default>"+"\n"+"</key>"+"\n"+"<key id=\"sourcecode\" attr.name=\"sourcecode\" for=\"edge\"/>"+"\n"+"<graph edgedefault=\"directed\">"+"\n"+"<data key=\"programfile\">"+filename+"</data>"+"\n"+"<data key=\"programhash\">"+hashcode+"</data>"+"\n"+"<data key=\"sourcecodelang\">C</data>"+"\n"+"<data key=\"producer\">VIAP</data>"+"\n"+"<data key=\"specification\">"+property+"</data>"+"\n"+"<data key=\"creationtime\">"+str(datetime.datetime.now().strftime("%y-%m-%dT%H:%MZ"))+"</data>"+"\n"+"<data key=\"witness-type\">violation_witness</data>"+"\n"+"<data key=\"architecture\">64bit</data>"+"\n"+"<node id=\"N0\">"+"\n"+"<data key=\"entry\">true</data>"+"\n"+"</node>"
+    violation_witness2=''
+    if len(outputs_list)>0:
+        for output_list in outputs_list:
+            if 'assumption' in output_list:
+                for x in if_cond_list:
+                    terms=x.split(':')
+                    if int(terms[-1])==0:
+                        violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+= "<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+= "<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                        violation_witness2+= "<data key=\"control\">condition-false</data>\n"
+                        if file_flag==True:
+                            violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                        violation_witness2+= "<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+= "</edge>"
+                        CountEdge=CountEdge+1
+                        CountNode=CountNode+1
+                if_cond_list=[]
+                terms=output_list.split(':')
+                current_assumption=terms[-1]
+            elif 'essumption' in output_list:
+                for x in if_cond_list:
+                    terms=x.split(':')
+                    if int(terms[-1])==0:
+                        violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+= "<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+= "<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                        violation_witness2+= "<data key=\"control\">condition-false</data>\n"
+                        if file_flag==True:
+                            violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                        violation_witness2+= "<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+= "</edge>"
+                        CountEdge=CountEdge+1
+                        CountNode=CountNode+1
+                if_cond_list=[]
+                terms=output_list.split(':')
+                e_current_assumption=terms[-1]
+
+            elif 'Assignment:' in output_list:
+                for x in if_cond_list:
+                    terms=x.split(':')
+                    if int(terms[-1])==0:
+                        violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                        if file_flag==True:
+                            violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountEdge=CountEdge+1
+                        CountNode=CountNode+1
+                if_cond_list=[]
+                
+                if current_assignment is not None:
+                    terms=current_assignment.split(':')
+                    violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1).replace('&&','&amp;&amp;')+"\">\n"
+                    violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                    if file_flag==True:
+                        violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                    violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    CountEdge=CountEdge+1
+                    CountNode=CountNode+1
+                current_assignment=output_list
+            elif 'Return' in output_list:
+                for x in if_cond_list:
+                    terms=x.split(':')
+                    if int(terms[-1])==0:
+                        violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                        if file_flag==True:
+                            violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountEdge=CountEdge+1
+                        CountNode=CountNode+1
+                if_cond_list=[]
+                
+                if current_assignment is not None:
+                    terms=current_assignment.split(':')
+                    violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                    if file_flag==True:
+                        violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                    violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    CountEdge=CountEdge+1
+                    CountNode=CountNode+1                
+                    current_assignment= None
+                terms=output_list.split(':')
+                violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                violation_witness2+="<data key=\"returnFrom\">"+terms[-3]+"</data>"
+                violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                if file_flag==True:
+                    violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                violation_witness2+="<data key=\"sourcecode\">return "+terms[-2]+";</data>\n"
+                violation_witness2+= "</edge>\n"
+                CountEdge=CountEdge+1
+                CountNode=CountNode+1
+                if terms[-3] in f_call_map.keys() and e_current_assumption is not None:
+                    two_terms=e_current_assumption.split('@')
+                    violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    violation_witness2+="<data key=\"endline\">"+f_call_map[terms[-3]]+"</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+f_call_map[terms[-3]]+"</data>\n"
+                    violation_witness2+="<data key=\"assumption\">"+two_terms[0]+"</data>\n"
+                    if file_flag==True:
+                        violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                    violation_witness2+="<data key=\"sourcecode\">"+two_terms[1].strip()+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    CountEdge=CountEdge+1
+                    CountNode=CountNode+1
+            elif 'WhileCondition' in output_list:
+                
+                for x in if_cond_list:
+                    terms=x.split(':')
+                    if int(terms[-1])==0:
+                        violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+= "<data key=\"startline\">"+terms[-2]+"</data>\n"
+                        violation_witness2+= "<data key=\"control\">condition-false</data>\n"
+                        if file_flag==True:
+                            violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                        violation_witness2+= "</edge>\n"
+                        CountEdge=CountEdge+1
+                        CountNode=CountNode+1
+                if_cond_list=[]
+                
+                if current_assignment is not None:
+                    terms=current_assignment.split(':')
+                    violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                    violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                    if file_flag==True:
+                        violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                    violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                    violation_witness2+="</edge>\n"
+                    CountEdge=CountEdge+1
+                    CountNode=CountNode+1                
+                    current_assignment= None
+                terms=output_list.split(':')
+                violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                if int(terms[-1])==1:
+                    violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                    if file_flag==True:
+                        violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                    violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                else:
+                    violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                    if file_flag==True:
+                        violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                    violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                violation_witness2+= "</edge>\n"
+                CountEdge=CountEdge+1
+                CountNode=CountNode+1
+            else:
+                if 'IfCondition1' in output_list or 'Else-IfCondition1' in output_list:
+                    
+                    if current_assignment is not None:
+                        terms=current_assignment.split(':')
+                        violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                        if file_flag==True:
+                            violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                        violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountEdge=CountEdge+1
+                        CountNode=CountNode+1                
+                        current_assignment= None
+                        
+                    if_cond_list.append(output_list)
+                elif 'IfCondition2' in output_list:
+                    
+                    if current_assignment is not None:
+                        terms=current_assignment.split(':')
+                        violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                        violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                        violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                        if file_flag==True:
+                            violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                        violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                        violation_witness2+="</edge>\n"
+                        CountEdge=CountEdge+1
+                        CountNode=CountNode+1                
+                        current_assignment= None
+                    
+                    #terms=output_list.split(':')
+                    #if int(terms[-1])==0:
+                    for x in if_cond_list:
+                        terms=x.split(':')
+                        if int(terms[-1])==0:
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                            violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                            violation_witness2+="</edge>\n"
+                            CountEdge=CountEdge+1
+                            CountNode=CountNode+1
+                    if_cond_list=[]
+                    terms=output_list.split(':')
+                    violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                    violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                    violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                    if int(terms[-1])==1:
+                        violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                        if file_flag==True:
+                            violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                        violation_witness2+="<data key=\"sourcecode\">["+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"]</data>\n"
+                    else:
+                        violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                        violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                        if file_flag==True:
+                            violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                        violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                    violation_witness2+="</edge>\n"
+                    CountEdge=CountEdge+1
+                    CountNode=CountNode+1
+                else:
+                    if 'FunctionCall' in output_list:
+                        if current_assignment is not None:
+                            terms=current_assignment.split(':')
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                            violation_witness2+="</edge>\n"
+                            CountEdge=CountEdge+1
+                            CountNode=CountNode+1                
+                            current_assignment= None
+                            
+                        for x in if_cond_list:
+                            terms=x.split(':')
+                            if int(terms[-1])==0:
+                                violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                                violation_witness2+="<data key=\"endline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"startline\">"+terms[-2]+"</data>\n"
+                                violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                                violation_witness2+="<data key=\"control\">condition-false</data>\n"
+                                if file_flag==True:
+                                    violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                                violation_witness2+="<data key=\"sourcecode\">[!("+terms[-3].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+")]</data>\n"
+                                violation_witness2+="</edge>\n"
+                                CountEdge=CountEdge+1
+                                CountNode=CountNode+1
+                        if_cond_list=[]
+                        terms=output_list.split(':')
+                        if terms[-3] in f_call_map.keys():
+                            two_terms=e_current_assumption.split('@')
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                            #violation_witness2+="<data key=\"assumption\">"+e_current_assumption+"</data>\n"
+                            violation_witness2+="<data key=\"assumption\">"+two_terms[0]+"</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            #violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">"+two_terms[1].strip()+"</data>\n"
+                            violation_witness2+="</edge>\n"
+                            CountEdge=CountEdge+1
+                            CountNode=CountNode+1
+                            #if e_current_assumption is not None:
+                            #    two_terms=e_current_assumption.split('@')
+                            #    violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            #    violation_witness2+="<data key=\"endline\">"+f_call_map[terms[-3]]+"</data>\n"
+                            #    violation_witness2+="<data key=\"startline\">"+f_call_map[terms[-3]]+"</data>\n"
+                            #    violation_witness2+="<data key=\"assumption\">"+two_terms[0]+"</data>\n"
+                            #    if file_flag==True:
+                            #        violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            #    violation_witness2+="<data key=\"sourcecode\">"+two_terms[1].strip()+"</data>\n"
+                            #    violation_witness2+="</edge>\n"
+                            #    CountEdge=CountEdge+1
+                            #    CountNode=CountNode+1
+        
+                        else:
+                            
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"enterFunction\">"+terms[-3]+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                            #violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                            violation_witness2+="</edge>\n"
+                            CountEdge=CountEdge+1
+                            CountNode=CountNode+1 
+                        f_call_map[terms[-3]]=terms[-1]              
+                    elif '_FAILED' in output_list:
+                        if current_assignment is not None:
+                            terms=current_assignment.split(':')
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                            violation_witness2+="</edge>\n"
+                            CountEdge=CountEdge+1
+                            CountNode=CountNode+1                
+                            current_assignment= None
+                            
+                        terms=output_list.split(':')
+                        if terms[-1]=='1':
+                            line_no,stmt = getLineNumber("__VERIFIER_error()",None)
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+str(line_no)+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+str(line_no)+"</data>\n"
+                            violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">__VERIFIER_error()</data>\n"
+                            violation_witness2+="</edge>\n"
+                            violation_witness3='\n'
+                            for x in range(1,CountNode+1):
+                                violation_witness3+="<node id=\"N"+str(x)+"\"/>\n"
+                            violation_witness3+="<node id=\"N"+str(CountNode+1)+"\">\n<data key=\"violation\">true</data>\n</node>\n"
+                            return violation_witness1+violation_witness3+violation_witness2+"\n</graph>\n</graphml>\n"
+                    elif '__VERIFIER_assert' in output_list:
+                        
+                        if current_assignment is not None:
+                            terms=current_assignment.split(':')
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+terms[-1]+"</data>\n"
+                            violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].strip()+"</data>\n"
+                            violation_witness2+="</edge>\n"
+                            CountEdge=CountEdge+1
+                            CountNode=CountNode+1                
+                            current_assignment= None
+                            
+                        terms=output_list.split(':')
+                        if terms[-1]=='0':
+                            line_no,stmt = getLineNumber(terms[-2],None)
+                            line_no1,stmt1 = getLineNumber('if (!(cond)) {',None)
+                            line_no2,stmt2 = getLineNumber('__VERIFIER_error();',None)
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+str(line_no)+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+str(line_no)+"</data>\n"
+                            violation_witness2+="<data key=\"assumption\">"+current_assumption+"</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">"+terms[-2].replace('>','&gt;').replace('<','&lt;').replace('&&','&amp;&amp;')+"</data>\n"
+                            violation_witness2+="</edge>\n"
+                            CountEdge=CountEdge+1
+                            CountNode=CountNode+1
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+str(line_no1)+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+str(line_no1)+"</data>\n"
+                            violation_witness2+="<data key=\"control\">condition-true</data>\n"
+                            violation_witness2+="<data key=\"assumption\">cond==0;</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">[!(cond)]</data>\n"
+                            violation_witness2+="</edge>\n"
+                            CountEdge=CountEdge+1
+                            CountNode=CountNode+1
+                            violation_witness2+="<edge id=\"E"+str(CountEdge)+"\""+" source=\"N"+str(CountNode)+"\" target=\"N"+str(CountNode+1)+"\">\n"
+                            violation_witness2+="<data key=\"endline\">"+str(line_no2)+"</data>\n"
+                            violation_witness2+="<data key=\"startline\">"+str(line_no2)+"</data>\n"
+                            violation_witness2+="<data key=\"assumption\">cond==0;</data>\n"
+                            if file_flag==True:
+                                violation_witness2+= "<data key=\"originfile\">"+filename+"</data>\n"
+                            violation_witness2+="<data key=\"sourcecode\">__VERIFIER_error()</data>\n"
+                            violation_witness2+="</edge>\n"
+                            violation_witness3='\n'
+                            for x in range(1,CountNode+1):
+                                violation_witness3+="<node id=\"N"+str(x)+"\"/>\n"
+                            violation_witness3+="<node id=\"N"+str(CountNode+1)+"\">\n<data key=\"violation\">true</data>\n</node>\n"
+                            return violation_witness1+violation_witness3+violation_witness2+"\n</graph>\n</graphml>\n"
+
+    return None
+
+
+
+
+def sha1(fname):
+    hash_sha1 = hashlib.sha1()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_sha1.update(chunk)
+    return hash_sha1.hexdigest()
+
+
+
+
+
+
+
+def process__VERIFIER_nondet_list(values__VERIFIER_nondet_list):
+    value__VERIFIER_nondet_map={}
+    for value__VERIFIER_nondet_list in values__VERIFIER_nondet_list:
+        outputs_values = value__VERIFIER_nondet_list.split(':')
+        key=outputs_values[0]+outputs_values[1]
+        if key not in value__VERIFIER_nondet_map.keys():
+            value__VERIFIER_nondet_map[key]=outputs_values
+    return value__VERIFIER_nondet_map
+        
+    
 
 
 #def processOutput(outputs_list):
@@ -19050,10 +20204,12 @@ def translate2IntForm(function_name,function_type,function_body,parametermap,tem
     #print(generator.visit(tempory))
     #print(generator.visit(function_body))
     
+    
+    
     membermethod=membermethodclass(function_name,function_type,parametermap,localvarmap,function_body,0,0,tempory,function_body_pa,None)
-    
-    input_value_extract=constructProgAssertAnalysis2(copy.deepcopy(membermethod.getAnalysis_module()),localvarmap,membermethod.getInputvar())
-    
+
+    input_value_extract=constructProgAssertAnalysis2(copy.deepcopy(membermethod.getAnalysis_module()),localvarmap,membermethod.getInputvar(),membermethod.getMethodname())
+
     membermethod.setAnalysis_module(constructProgAssertAnalysis(membermethod.getAnalysis_module(),localvarmap,membermethod.getInputvar()))
     
     
@@ -19204,9 +20360,6 @@ def translate2IntForm(function_name,function_type,function_body,parametermap,tem
         str_program=programToinductiveDefination_C(expressions , allvariable)
     else:
         str_program=program_dec_start+','+programToinductiveDefination_C(expressions , allvariable)+program_dec_end
-    #print '%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-    #print str_program
-    #print '%%%%%%%%%%%%%%%%%%%%%%%%%%%'
     program=eval(str_program)
     return program,variablesarray,membermethod.getMethodname(),membermethod.getInputvar(),opvariablesarray,membermethod.getAnalysis_module(),input_value_extract
 
@@ -19537,6 +20690,11 @@ def translate_C(file_name):
     return axiom
  
  
+
+ 
+ 
+ 
+ 
 #Construct Program for Assetion Analysis
 
 def constructProgAssertAnalysis(functionbody,localvariables,inputvariables):
@@ -19547,18 +20705,571 @@ def constructProgAssertAnalysis(functionbody,localvariables,inputvariables):
     functionbody=c_ast.Compound(block_items=addPrintStmt(functionbody.block_items,localvariables,inputvariables))
     return functionbody
 
-count__VERIFIER_nondet=0
+count_for__VERIFIER_nondet=0
+count_for__insert_flag=0
+count_for__function_flag=0
+line_count_trace=0
+new_program_trace_var={}
+back_line_no_stmt_map={}
+main_line_no_stmt_ast_map={}
+count_ast_line_no=0
 
-def constructProgAssertAnalysis2(functionbody,localvariables,inputvariables):
-    #arg_list=[]
-    #arg_list.append(c_ast.Constant(type="string", value="\"j:%d\\n\""))
-    #arg_list.append(c_ast.ID(name="j"))
-    #print_function=c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list))
-    #global count__VERIFIER_nondet
-    #count__VERIFIER_nondet=0
-    #functionbody.block_items=modify__VERIFIER_nondet_block(functionbody.block_items)
-    #functionbody=c_ast.Compound(block_items=addPrintStmt2(functionbody.block_items,localvariables,inputvariables))
-    return functionbody
+
+
+def constructProgAssertAnalysis2(functionbody,localvariables,inputvariables,methodname):
+    global count_for__VERIFIER_nondet
+    global count_for__insert_flag
+    global count_for__function_flag
+    global count_ast_line_no
+    global new_program_trace_var
+    global line_no_stmt_map
+    global back_line_no_stmt_map
+    global main_line_no_stmt_ast_map
+    back_line_no_stmt_map=copy.deepcopy(line_no_stmt_map)
+    
+
+    count_for__VERIFIER_nondet=0
+    count_for__insert_flag=0
+    count_for__function_flag=0
+    new_program_trace_var={}
+    all_variable_map={}
+    update_statements=[]
+    parser = c_parser.CParser()
+    try:
+        new_statements=copy.deepcopy(functionbody.block_items)
+        
+        statements = constructExcutionTraceBlock(copy.deepcopy(functionbody.block_items),all_variable_map,methodname,new_statements)
+        
+        for x in new_program_trace_var.keys():
+            program_temp='int '+x+'=0;'
+            temp_ast = parser.parse(program_temp)
+            update_statements.append(temp_ast.ext[0])
+        for x in statements:
+             update_statements.append(x)
+    except Exception as e:
+        print e
+    functionbody.block_items=modify__VERIFIER_nondet_block(functionbody.block_items)
+    functionbody=c_ast.Compound(block_items=addPrintStmt2(functionbody.block_items,localvariables,inputvariables))
+    functionbody1=c_ast.Compound(block_items=update_statements)
+    return (functionbody,functionbody1)
+
+
+def getLineNumber(stmt,count_ast_line_no):
+    find_list=[]
+    find_list_ast=[]
+    global back_line_no_stmt_map
+    global main_line_no_stmt_ast_map
+    for x in main_line_no_stmt_ast_map.keys():
+        if stmt == main_line_no_stmt_ast_map[x]:
+            find_list_ast.append(x)
+    for x in back_line_no_stmt_map.keys():
+        if getSpaceRemoveStr(stmt) in getSpaceRemoveStr(x):
+            find_list.append(x)
+    value=0
+    key=None
+    value1=None
+    if count_ast_line_no is not None:
+        if len(find_list_ast)==len(find_list) and len(find_list_ast)>1:
+            t_list=[]
+            for x in find_list:
+                ys=x.split('@')
+                t_list.append(int(ys[1]))
+            t_list=sorted(t_list)
+            if count_ast_line_no in t_list:
+                t_find_list=[]
+                for x in find_list:
+                    if x.endswith('@'+str(count_ast_line_no)) ==True:
+                        t_find_list.append(x)
+                if len(t_find_list)>=0:
+                    find_list=t_find_list
+            elif count_ast_line_no-1 in t_list:
+                t_find_list=[]
+                for x in find_list:
+                    if x.endswith('@'+str(count_ast_line_no-1)) ==True:
+                        t_find_list.append(x)
+                if len(t_find_list)>=0:
+                    find_list=t_find_list
+    
+    for x in find_list:
+        if 'extern void __VERIFIER_error();' not in x:
+            ys=x.split('@')
+            if value==0 :
+                value=int(ys[1])
+                key=x
+                value1=back_line_no_stmt_map[x]
+                #print count_ast_line_no
+                #print int(ys[1])
+                
+                #if count_ast_line_no is None:
+                #    value=int(ys[1])
+                #    key=x
+                #    value1=back_line_no_stmt_map[x]
+                #else:
+                #    if count_ast_line_no<int(ys[1]):
+                #        value=int(ys[1])
+                #        key=x
+                #        value1=back_line_no_stmt_map[x]
+                    
+            elif value>=int(ys[1]):
+                value=int(ys[1])
+                key=x
+                value1=back_line_no_stmt_map[x]
+    if key is not None:
+        new_key=key.replace(stmt,'')
+        new_value = back_line_no_stmt_map[key]
+        del back_line_no_stmt_map[key]
+        back_line_no_stmt_map[new_key]=new_value
+    #print '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@'
+    #print back_line_no_stmt_map
+    #print '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@'
+    
+    return value,value1
+
+def more2equality(expression):
+    count=0
+    if "&&" not in expression and "||" not in expression and "<" not in expression and ">" not in expression:
+        for x in expression:
+            if x is '=':
+                count+=1
+        if count>2:
+            return count
+        else:
+            return None
+    return None
+    
+            
+
+def getSpaceRemoveStr(expression):
+    
+    new_expression=''
+    for x in expression:
+        if x!=' ' and x!='' and x!='(' and x!=')':
+            new_expression+=x
+    return new_expression
+        
+
+
+
+
+def getVariablesExcutionTrace(statement,all_variable_map):
+    if type(statement) is c_ast.BinaryOp:
+        getVariablesExcutionTrace(statement.left,all_variable_map)
+        getVariablesExcutionTrace(statement.right,all_variable_map)
+    elif type(statement) is c_ast.Assignment:
+        getVariablesExcutionTrace(statement.lvalue,all_variable_map)
+        getVariablesExcutionTrace(statement.rvalue,all_variable_map)
+    elif type(statement) is c_ast.FuncCall:
+        if statement.args is not None:
+            for x in statement.args.exprs:
+                getVariablesExcutionTrace(x,all_variable_map)
+    elif type(statement) is c_ast.ID:
+        key = programPrint(statement)
+        if '_FAILED' not in key and '_PROVE' not in key:
+            all_variable_map[key]=key
+    elif type(statement) is c_ast.ArrayRef:
+        key = programPrint(statement)
+        if '_FAILED' not in key and '_PROVE' not in key:
+            all_variable_map[key]=key
+            
+
+
+
+
+def line_count_ast_Block(statements):
+    global main_count_ast_line_no
+    global main_line_no_stmt_ast_map
+    for statement in statements:
+        if type(statement) is c_ast.While:
+            main_count_ast_line_no+=1
+            main_line_no_stmt_ast_map[main_count_ast_line_no]=programPrint(statement.cond)
+            line_count_ast_Block(statement.stmt.block_items)
+        elif type(statement) is c_ast.If:
+            line_count_ast_If(statement)
+        elif type(statement) is c_ast.Return:
+            main_count_ast_line_no+=1
+            main_line_no_stmt_ast_map[main_count_ast_line_no]=programPrint(statement)
+        else:
+            main_count_ast_line_no+=1
+            main_line_no_stmt_ast_map[main_count_ast_line_no]=programPrint(statement)
+            
+
+            
+def line_count_ast_If(statement):
+    global main_count_ast_line_no
+    global main_line_no_stmt_ast_map
+    if type(statement) is c_ast.If:
+         if type(statement.iftrue) is c_ast.Compound:
+             main_count_ast_line_no+=1
+             main_line_no_stmt_ast_map[main_count_ast_line_no]=programPrint(statement.cond)
+             line_count_ast_Block(statement.iftrue.block_items)
+         if type(statement.iffalse) is c_ast.Compound:
+             line_count_ast_Block(statement.iffalse.block_items)
+         elif type(statement.iffalse) is c_ast.If:
+             line_count_ast_If(statement.iffalse)
+
+
+def getVariablesExcutionTraceBlock(statements,all_variable_map):
+    for statement in statements:
+        if type(statement) is c_ast.Assignment:
+            getVariablesExcutionTrace(statement,all_variable_map)
+        elif type(statement) is c_ast.While:
+            getVariablesExcutionTrace(statement.cond,all_variable_map)
+            getVariablesExcutionTraceBlock(statement.stmt.block_items,all_variable_map)
+        elif type(statement) is c_ast.If:
+            getVariablesExcutionTraceIf(statement,all_variable_map)
+        elif type(statement) is c_ast.Return:
+            getVariablesExcutionTrace(statement.expr,all_variable_map)
+            
+def getVariablesExcutionTraceIf(statement,all_variable_map):
+    if type(statement) is c_ast.If:
+         if type(statement.iftrue) is c_ast.Compound:
+             getVariablesExcutionTraceBlock(statement.iftrue.block_items,all_variable_map)
+         if type(statement.iffalse) is c_ast.Compound:
+             getVariablesExcutionTraceBlock(statement.iffalse.block_items,all_variable_map)
+         elif type(statement.iffalse) is c_ast.If:
+             getVariablesExcutionTraceIf(statement.iffalse,all_variable_map)
+    
+
+
+def constructExcutionTraceBlock(statements,all_variable_map,methodname,new_statements):
+    global count_for__insert_flag
+    global back_line_no_stmt_map
+    global count_ast_line_no
+    global main_count_ast_line_no
+    prev_line_no=None
+    update_statements=[]
+    prev_line_no=None
+    prev_stmt=None
+    for statement in statements:
+        if type(statement) is c_ast.Assignment:
+            count_ast_line_no+=1
+            line_no,stmt = getLineNumber(programPrint(statement),count_ast_line_no)
+            function_assgmt={}
+            
+            new_statement=getFunctionCallAssigment(statement,function_assgmt)
+            
+            
+            if len(function_assgmt)>0:
+                for x in function_assgmt:
+                    new_program_trace_var[x]=x
+                    arg_list1=[]
+                    arg_list1.append(c_ast.Constant(type="string", value="\"FunctionCall:"+programPrint(statement)+":"+function_assgmt[x].rvalue.name.name+":"+programPrint(function_assgmt[x].rvalue)+":"+str(line_no)+""+"\\n\""))
+                    update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list1)))
+                    
+                    update_statements.append(function_assgmt[x])
+                    
+                    arg_list2=[]
+                    arg_list2.append(c_ast.Constant(type="string", value="\"RecahCallPoint:"+":"+programPrint(function_assgmt[x].rvalue)+":"+str(line_no)+""+"\\n\""))
+                    update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list2)))
+                    
+                    
+
+                update_statements.append(new_statement)
+            else:
+                update_statements.append(statement)
+            
+            getVariablesExcutionTrace(statement,all_variable_map)
+            
+            
+            str_printf_stmt=None
+            arg_list1=[]
+            temp_arg_list1=[]
+            for x in all_variable_map:
+                if str_printf_stmt is None:
+                    str_printf_stmt="\"assumption:"+x+"==%d;"
+                    temp_arg_list1.append(x)
+                else:
+                    str_printf_stmt+=x+"==%d;"
+                    temp_arg_list1.append(x)
+            if str_printf_stmt is not None:
+                str_printf_stmt+="\\n\""
+                arg_list1.append(c_ast.Constant(type="string", value=str_printf_stmt))
+                for x in temp_arg_list1:
+                    arg_list1.append(c_ast.ID(name=x))
+                update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list1)))
+            
+
+            if line_no==0 and stmt is None:
+                line_no=prev_line_no
+                stmt=prev_stmt
+
+            if line_no>0 and stmt is not None:
+                status = more2equality(expression)
+                if status is not None:
+                    prev_line_no=line_no
+                    prev_stmt=stmt
+                else:
+                    prev_line_no=0
+                    prev_stmt=None
+                arg_list=[]
+                #arg_list.append(c_ast.Constant(type="string", value="\"Assignment:"+programPrint(statement)+":"+stmt+":"+str(line_no)+"\\n\""))
+                arg_list.append(c_ast.Constant(type="string", value="\"Assignment:"+programPrint(statement)+":"+stmt+":"+str(line_no)+"\\n\""))
+                update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+                
+    
+                
+            else:
+                if ('_FAILED' in programPrint(statement.lvalue) or '_PROVE' in programPrint(statement.lvalue)) and type(statement.rvalue) is c_ast.Constant and statement.rvalue.value=='1':
+                    arg_list=[]
+                    arg_list.append(c_ast.Constant(type="string", value="\""+programPrint(statement.lvalue)+":%d\\n\""))
+                    arg_list.append(statement.lvalue)
+                    update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+                elif '_PROVE' in programPrint(statement.lvalue) and type(statement.rvalue) is not c_ast.Constant :
+                    arg_list=[]
+                    arg_list.append(c_ast.Constant(type="string", value="\"__VERIFIER_assert("+programPrint(statement.rvalue)+"):%d\\n\""))
+                    arg_list.append(statement.lvalue)
+                    update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+        elif type(statement) is c_ast.While:
+            count_ast_line_no+=1
+            arg_list=[]
+            count_for__insert_flag=count_for__insert_flag+1
+            ID_name='_con_flag'+str(count_for__insert_flag)
+            update_statements.append(c_ast.Assignment(op='=',lvalue=c_ast.ID(name='_con_flag'+str(count_for__insert_flag)),rvalue=statement.cond))
+            new_program_trace_var['_con_flag'+str(count_for__insert_flag)]='_con_flag'+str(count_for__insert_flag)
+            line_no,stmt = getLineNumber(programPrint(statement.cond),count_ast_line_no)
+            
+            if line_no>0:
+                arg_list.append(c_ast.Constant(type="string", value="\"WhileCondition:"+programPrint(statement.cond)+":"+str(line_no)+":%d"+"\\n\""))
+                arg_list.append(c_ast.ID(name='_con_flag'+str(count_for__insert_flag)))
+                
+                update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+            
+            temp_block = constructExcutionTraceBlock(statement.stmt.block_items,all_variable_map,methodname,new_statements)
+            temp_block.append(c_ast.Assignment(op='=',lvalue=c_ast.ID(name=ID_name),rvalue=statement.cond))
+            temp_block.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+            update_statements.append(c_ast.While(cond=c_ast.ID(name=ID_name), stmt=c_ast.Compound(block_items=temp_block)))
+        elif type(statement) is c_ast.If:
+            temp_stmt,list_of_con_ex_trace,list_of_con_ex_trace1 = constructExcutionTraceIf(statement,all_variable_map,None,methodname,new_statements)
+            for x in list_of_con_ex_trace:
+                update_statements.append(x)
+                new_program_trace_var[x.lvalue.name]=x.lvalue.name
+                #line_no,stmt = getLineNumber(programPrint(x.rvalue))
+            for x in list_of_con_ex_trace1:
+                update_statements.append(x)
+            update_statements.append(temp_stmt)
+        elif type(statement) is c_ast.Return:
+            count_ast_line_no+=1
+            line_no,stmt = getLineNumber(programPrint(statement),count_ast_line_no)
+
+            function_assgmt={}
+            new_statement=getFunctionCallAssigment(statement.expr,function_assgmt)
+            
+            
+            if len(function_assgmt)>0:
+                
+                t_all_variable_map={}
+            
+                if methodname=='main':
+                    getVariablesExcutionTrace(statement,t_all_variable_map)
+                else:
+                    getVariablesExcutionTraceBlock(new_statements,t_all_variable_map)
+                
+                t_str_printf_stmt=None
+                
+                
+                t_temp_arg_list1=[]
+                    
+                for x in t_all_variable_map:
+                    if t_str_printf_stmt is None:
+                        t_str_printf_stmt="\"essumption:"+x+"==%d;"
+                        t_temp_arg_list1.append(x)
+                    else:
+                        t_str_printf_stmt+=x+"==%d;"
+                        t_temp_arg_list1.append(x)
+                
+                for x in function_assgmt:
+                    new_program_trace_var[x]=x
+                    arg_list1=[]
+                    arg_list1.append(c_ast.Constant(type="string", value="\"FunctionCall:#:"+function_assgmt[x].rvalue.name.name+":"+programPrint(function_assgmt[x].rvalue)+":"+str(line_no)+""+"\\n\""))
+                    update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list1)))
+                    update_statements.append(function_assgmt[x])
+                    
+                    if t_str_printf_stmt is None:
+                            t_str_printf_stmt="\"essumption:"+programPrint(function_assgmt[x].rvalue)+"==%d;"
+                            t_temp_arg_list1.append(x)
+                    else:
+                            t_str_printf_stmt+=programPrint(function_assgmt[x].rvalue)+"==%d;"
+                            t_temp_arg_list1.append(x)
+                    
+                    if t_str_printf_stmt is not None:
+                        t_arg_list1=[]
+                        t_arg_list1.append(c_ast.Constant(type="string", value=t_str_printf_stmt+"@"+programPrint(function_assgmt[x].rvalue)+"\\n\""))
+                        for x in t_temp_arg_list1:
+                            t_arg_list1.append(c_ast.ID(name=x))
+                        update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=t_arg_list1)))
+                
+                
+                
+                
+                if methodname=='main':
+                    getVariablesExcutionTrace(statement,all_variable_map)
+                else:
+                    getVariablesExcutionTraceBlock(new_statements,all_variable_map)
+                str_printf_stmt=None
+                arg_list1=[]
+                temp_arg_list1=[]
+                for x in all_variable_map:
+                    if str_printf_stmt is None:
+                        str_printf_stmt="\"assumption:"+x+"==%d;"
+                        temp_arg_list1.append(x)
+                    else:
+                        str_printf_stmt+=x+"==%d;"
+                        temp_arg_list1.append(x)
+                if str_printf_stmt is not None:
+                    str_printf_stmt+="\\n\""
+                    arg_list1.append(c_ast.Constant(type="string", value=str_printf_stmt))
+                    for x in temp_arg_list1:
+                        arg_list1.append(c_ast.ID(name=x))
+                    update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list1)))
+                
+                
+                arg_list=[]
+
+                #arg_list.append(c_ast.Constant(type="string", value="\"Return:"+methodname+":"+programPrint(statement.expr)+":"+str(line_no)+""+"\\n\""))
+                arg_list.append(c_ast.Constant(type="string", value="\"Return:"+programPrint(statement.expr)+":"+programPrint(statement.expr)+":"+methodname+":%d"+":"+str(line_no)+""+"\\n\""))
+                arg_list.append(new_statement)
+                update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+                update_statements.append(c_ast.Return(expr=new_statement))
+            else:
+                
+                
+                if methodname=='main':
+                    getVariablesExcutionTrace(statement,all_variable_map)
+                else:
+                    getVariablesExcutionTraceBlock(new_statements,all_variable_map)
+                str_printf_stmt=None
+                arg_list1=[]
+                temp_arg_list1=[]
+                for x in all_variable_map:
+                    if str_printf_stmt is None:
+                        str_printf_stmt="\"assumption:"+x+"==%d;"
+                        temp_arg_list1.append(x)
+                    else:
+                        str_printf_stmt+=x+"==%d;"
+                        temp_arg_list1.append(x)
+                if str_printf_stmt is not None:
+                    str_printf_stmt+="\\n\""
+                    arg_list1.append(c_ast.Constant(type="string", value=str_printf_stmt))
+                    for x in temp_arg_list1:
+                        arg_list1.append(c_ast.ID(name=x))
+                    update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list1)))
+                    
+                
+                arg_list=[]
+                #arg_list.append(c_ast.Constant(type="string", value="\"Return:"+methodname+":"+programPrint(statement.expr)+":"+str(line_no)+""+"\\n\""))
+                arg_list.append(c_ast.Constant(type="string", value="\"Return:"+programPrint(statement.expr)+":"+methodname+":%d"+":"+str(line_no)+""+"\\n\""))
+                arg_list.append(statement.expr)
+                update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+                update_statements.append(statement)
+        else:
+            count_ast_line_no+=1
+            update_statements.append(statement)
+
+    return update_statements
+
+
+def constructExcutionTraceIf(statement,all_variable_map,isElse,methodname,new_statements):
+    global count_for__insert_flag
+    global count_ast_line_no
+    global main_count_ast_line_no
+    If_stmt=None
+    Else_stmt=None
+    list_of_con_ex_trace=[]
+    list_of_con_ex_trace1=[]
+    if type(statement) is c_ast.If:
+        count_ast_line_no+=1
+        count_for__insert_flag=count_for__insert_flag+1
+        list_of_con_ex_trace.append(c_ast.Assignment(op='=',lvalue=c_ast.ID(name='_con_flag'+str(count_for__insert_flag)),rvalue=statement.cond))
+        cond_stmt=c_ast.ID(name='_con_flag'+str(count_for__insert_flag))
+        if type(statement.iftrue) is c_ast.Compound:
+            
+            update_new_block_temp=[]
+            
+            line_no,stmt = getLineNumber(programPrint(statement.cond),count_ast_line_no)
+            
+            new_block_temp=constructExcutionTraceBlock(statement.iftrue.block_items,all_variable_map,methodname,new_statements)
+            
+            
+            #print '-------------------'
+            #print programPrint(statement.cond)
+            #print line_no
+            #print stmt
+            #print count_ast_line_no
+            #print main_count_ast_line_no
+            #print '-------------------'
+            
+            if line_no>0:
+                arg_list=[]
+                arg_list.append(c_ast.Constant(type="string", value="\"IfCondition2:"+programPrint(statement.cond)+":"+str(line_no)+":%d"+"\\n\""))
+                arg_list.append(c_ast.ID(name='_con_flag'+str(count_for__insert_flag)))
+                update_new_block_temp.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+                arg_list1=[]
+                if isElse is not None:
+                    arg_list1.append(c_ast.Constant(type="string", value="\"Else-IfCondition1:"+programPrint(statement.cond)+":"+str(line_no)+":%d"+"\\n\""))
+                else:
+                    arg_list1.append(c_ast.Constant(type="string", value="\"IfCondition1:"+programPrint(statement.cond)+":"+str(line_no)+":%d"+"\\n\""))
+                arg_list1.append(c_ast.ID(name='_con_flag'+str(count_for__insert_flag)))
+                list_of_con_ex_trace1.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list1)))
+            
+            
+            If_stmt=c_ast.Compound(block_items=update_new_block_temp+new_block_temp)
+            
+        else:
+            If_stmt=statement.iftrue
+            
+        if type(statement.iffalse) is c_ast.Compound:
+            if statement.iffalse.block_items is not None:
+                update_new_block_temp=[]
+                
+                line_no,stmt = getLineNumber(programPrint(statement.cond),count_ast_line_no)
+                
+                new_block_temp=constructExcutionTraceBlock(statement.iffalse.block_items,all_variable_map,methodname,new_statements)
+                
+                #if line_no>0:
+                    #arg_list=[]
+                    #arg_list.append(c_ast.Constant(type="string", value="\"IfCondition2:"+programPrint(c_ast.UnaryOp(op='!',expr=statement.cond))+":"+str(line_no)+":%d"+"\\n\""))
+                    #arg_list.append(c_ast.UnaryOp(op='!',expr=c_ast.ID(name='_con_flag'+str(count_for__insert_flag))))
+                    #update_new_block_temp.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
+                    #arg_list1=[]
+                    #arg_list1.append(c_ast.Constant(type="string", value="\"Else-IfCondition1:"+programPrint(c_ast.UnaryOp(op='!',expr=statement.cond))+":"+str(line_no)+":%d"+"\\n\""))
+                    #arg_list1.append(c_ast.UnaryOp(op='!',expr=c_ast.ID(name='_con_flag'+str(count_for__insert_flag))))
+                    #list_of_con_ex_trace1.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list1)))
+                Else_stmt=c_ast.Compound(block_items=new_block_temp)
+                #Else_stmt=c_ast.Compound(block_items=update_new_block_temp+new_block_temp)
+            else:
+                Else_stmt=statement.iffalse
+        else:
+            if type(statement.iffalse) is c_ast.If:
+                Else_stmt,list_of_con_ex_trace_temp,list_of_con_ex_trace1_temp=constructExcutionTraceIf(statement.iffalse,all_variable_map,'Else',methodname,new_statements)
+                list_of_con_ex_trace=list_of_con_ex_trace+list_of_con_ex_trace_temp
+                list_of_con_ex_trace1=list_of_con_ex_trace1+list_of_con_ex_trace1_temp
+            else:
+                Else_stmt=statement.iffalse
+    return c_ast.If(cond=cond_stmt, iftrue=If_stmt, iffalse=Else_stmt),list_of_con_ex_trace,list_of_con_ex_trace1
+
+
+
+def getFunctionCallAssigment(statement,function_assgmt):
+    global count_for__function_flag
+    if type(statement) is c_ast.BinaryOp:
+        return c_ast.BinaryOp(op=statement.op,left=getFunctionCallAssigment(statement.left,function_assgmt),right=getFunctionCallAssigment(statement.right,function_assgmt))
+    elif type(statement) is c_ast.Assignment:
+        return c_ast.Assignment(op=statement.op,lvalue=getFunctionCallAssigment(statement.lvalue,function_assgmt),rvalue=getFunctionCallAssigment(statement.rvalue,function_assgmt))
+    elif type(statement) is c_ast.FuncCall:
+        if '__VERIFIER_nondet' not in statement.name.name:
+            if statement.args is not None:
+                count_for__function_flag+=1
+                function_assgmt['_fun_call'+str(count_for__function_flag)]=c_ast.Assignment(op='=',lvalue=c_ast.ID(name='_fun_call'+str(count_for__function_flag)),rvalue=statement)
+                return c_ast.ID(name='_fun_call'+str(count_for__function_flag))
+            else:
+                return statement
+        else:
+            return statement
+    else:
+        return statement
+
+
+
 
 def getAllNodesOfAssetion(statement,map_nodes):
     if type(statement) is c_ast.BinaryOp:
@@ -19731,50 +21442,19 @@ def addPrintStmt2(statements,localvariables,inputvariables):
                 update_statements.append(statement)
                 nodes=[]
                 list_variables=[]
-                #getAllNodesOfAssetion(statement.rvalue,nodes)
                 update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                #for node in nodes:
-                #        if type(node) is c_ast.ID:
-                #            list_variables.append(node.name)
-                #        update_statements.append(createPrint(node,localvariables,inputvariables))
-                #for var in localvariables.keys():
-                #    varObject=localvariables[var]
-                #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
-                #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
-                #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
-                #arg_list=[]
-                #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
-                #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
             
             elif type(statement.lvalue) is c_ast.ID and '_FAILED' in statement.lvalue.name and type(statement.rvalue) is c_ast.Constant and statement.rvalue.value=='1':
                 update_statements.append(statement)
                 nodes=[]
                 list_variables=[]
-                #getAllNodesOfAssetion(statement.rvalue,nodes)
-                update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                #for node in nodes:
-                #        if type(node) is c_ast.ID:
-                #            list_variables.append(node.name)
-                #        update_statements.append(createPrint(node,localvariables,inputvariables))
-                #for var in localvariables.keys():
-                #    varObject=localvariables[var]
-                #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
-                #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
-                #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
-                #arg_list=[]
-                #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
-                #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))            
-            
+                update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))            
             
             elif type(statement.lvalue) is c_ast.ID and '_ASSUME' in statement.lvalue.name and type(statement.rvalue) is c_ast.BinaryOp:
                 update_statements.append(statement)
                 nodes=[]
                 list_variables=[]
-                #getAllNodesOfAssetion(statement.rvalue,nodes)
                 update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                #arg_list=[]
-                #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
-                #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
             
             
             
@@ -19783,49 +21463,20 @@ def addPrintStmt2(statements,localvariables,inputvariables):
                     update_statements.append(statement)
                     nodes=[]
                     list_variables=[]
-                    #getAllNodesOfAssetion(statement.rvalue,nodes)
-                    update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                    #for node in nodes:
-                    #    if type(node) is c_ast.ID:
-                    #        list_variables.append(node.name)
-                    #    update_statements.append(createPrint(node,localvariables,inputvariables))
-                    #for var in localvariables.keys():
-                    #    varObject=localvariables[var]
-                    #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
-                    #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'RET' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
-                    #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
-                    #arg_list=[]
-                    #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
-                    #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
-                
+                    update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))                
                 elif type(statement.lvalue) is c_ast.ID and '_FAILED' in statement.lvalue.name and  type(statement.rvalue) is c_ast.Constant and statement.rvalue.value=='1':
                     update_statements.append(statement)
                     nodes=[]
                     list_variables=[]
-                    #getAllNodesOfAssetion(statement.rvalue,nodes)
                     update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                    #for node in nodes:
-                    #        if type(node) is c_ast.ID:
-                    #            list_variables.append(node.name)
-                    #        update_statements.append(createPrint(node,localvariables,inputvariables))
-                    #for var in localvariables.keys():
-                    #    varObject=localvariables[var]
-                    #    if varObject.getDimensions()==0 or varObject.getDimensions() is None:
-                    #        if varObject.getVariablename() not in list_variables and '_PROVE' not in varObject.getVariablename() and '_ASSUME' not in varObject.getVariablename() and '_FAILED' not in varObject.getVariablename() and 'DUMMY' not in varObject.getVariablename() and 'break_' not in varObject.getVariablename() and 'bool_go' not in varObject.getVariablename():
-                    #            update_statements.append(createPrint(c_ast.ID(name=varObject.getVariablename()),localvariables,inputvariables))
-                    #arg_list=[]
-                    #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
-                    #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list))) 
+
                 
                 elif type(statement.lvalue) is c_ast.ArrayRef and '_ASSUME' in getArrayRef_Name(statement.lvalue):
                     update_statements.append(statement)
                     nodes=[]
                     list_variables=[]
-                    #getAllNodesOfAssetion(statement.rvalue,nodes)
+
                     update_statements.append(createPrint(statement.lvalue,localvariables,inputvariables))
-                    #arg_list=[]
-                    #arg_list.append(c_ast.Constant(type="string", value="\"--------\\n\""))
-                    #update_statements.append(c_ast.FuncCall(name=c_ast.ID(name="printf"), args=c_ast.ExprList(exprs=arg_list)))
                         
                 else:
                     update_statements.append(statement)
@@ -19880,6 +21531,7 @@ def modify__VERIFIER_nondet_block(statements):
 def modify__VERIFIER_nondet_blockIf(statement):
     If_stmt=None
     Else_stmt=None
+    cond_stmt=modify__VERIFIER_nondet_stmt(statement.cond)
     if type(statement) is c_ast.If:
         if type(statement.iftrue) is c_ast.Compound:
             new_block_temp=modify__VERIFIER_nondet_block(statement.iftrue.block_items)
@@ -19894,15 +21546,15 @@ def modify__VERIFIER_nondet_blockIf(statement):
             Else_stmt=statement.iffalse
     else:
         if type(statement.iffalse) is c_ast.If:
-            Else_stmt=modify__VERIFIER_nondet_block(statement.iffalse)
+            Else_stmt=modify__VERIFIER_nondet_blockIf(statement.iffalse)
         else:
             Else_stmt=statement.iffalse
-    return c_ast.If(cond=statement.cond, iftrue=If_stmt, iffalse=Else_stmt)
+    return c_ast.If(cond=cond_stmt, iftrue=If_stmt, iffalse=Else_stmt)
     
     
     
 def modify__VERIFIER_nondet_stmt(statement):
-    global count__VERIFIER_nondet
+    global count_for__VERIFIER_nondet
     if type(statement) is c_ast.BinaryOp:
         return c_ast.BinaryOp(op=statement.op,left=modify__VERIFIER_nondet_stmt(statement.left),right=modify__VERIFIER_nondet_stmt(statement.right))
     elif type(statement) is c_ast.Assignment:
@@ -19911,8 +21563,8 @@ def modify__VERIFIER_nondet_stmt(statement):
         if '__VERIFIER_nondet' in statement.name.name:
             if statement.args is None:
                 arg_list=[]
-                count__VERIFIER_nondet=count__VERIFIER_nondet+1
-                arg_list.append(c_ast.Constant(type="int", value=str(count__VERIFIER_nondet)))
+                count_for__VERIFIER_nondet=count_for__VERIFIER_nondet+1
+                arg_list.append(c_ast.Constant(type="int", value=str(count_for__VERIFIER_nondet)))
                 return c_ast.FuncCall(name=statement.name, args=c_ast.ExprList(exprs=arg_list))
             else:
                 return statement
