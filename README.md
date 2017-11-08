@@ -25,7 +25,7 @@ Untar: tar -xvf VIAP-SVCOMP2018.zip
 --spec=SPEC SPEC is the property file.
 ```
 ## Categories
-### SeaHorn is participating in the following sub-categories.
+### VIAP is participating in the following sub-categories.
 ```
 -ReachSafety-Arrays, 
 ```
